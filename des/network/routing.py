@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from abc import ABC, abstractmethod
+from typing import Callable
 
 
 class RoutingPolicy(ABC):
@@ -66,3 +67,25 @@ class ClassBasedRouter(RoutingPolicy):
                 f"Known classes: {list(self.routes.keys())}"
             )
         return self.routes[cls]
+
+
+class CallbackRouter(RoutingPolicy):
+    """Routes customers via an externally supplied callable.
+
+    The callable receives the customer dict and the successor list and must
+    return the id of the next node.  This is the integration point for RL
+    agents: wrap the agent's action-selection logic in a function and pass it
+    here.
+
+    Example:
+        def my_policy(customer, successors):
+            return successors[agent.act(obs)][0]
+
+        network.set_router(CallbackRouter(my_policy))
+    """
+
+    def __init__(self, fn: Callable[[dict, list[tuple[str, float]]], str]) -> None:
+        self.fn = fn
+
+    def next_node(self, customer: dict, successors: list[tuple[str, float]]) -> str:
+        return self.fn(customer, successors)

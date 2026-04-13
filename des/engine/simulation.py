@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Callable
 from des.engine.scheduler import Scheduler
 
 if TYPE_CHECKING:
+    from des.engine.event import Event
     from des.nodes.base import Node
 
 
@@ -35,6 +36,17 @@ class Simulation:
                 next_refresh = self.clock + refresh_interval
         if on_refresh is not None:
             on_refresh(self.clock, until)
+
+    def step(self) -> Event | None:
+        if self.scheduler.is_empty():
+            return None
+        event = self.scheduler.pop_next()
+        self.clock = event.time
+        node = self._nodes.get(event.target_id)
+        if node is None:
+            raise KeyError(f"No node registered with id '{event.target_id}'")
+        node.handle(event)
+        return event
 
     @property
     def warmed_up(self) -> bool:

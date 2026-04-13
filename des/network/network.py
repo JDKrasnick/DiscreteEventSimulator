@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 import networkx as nx
@@ -80,6 +81,16 @@ class QueueingNetwork:
         if not sinks:
             raise ValueError("Network has no sink nodes.")
 
+    def start(self) -> None:
+        """Seed the event queue without running the simulation.
+
+        Call this instead of run() when you want to drive the simulation
+        manually via sim.step() (e.g. from a gym environment).
+        """
+        self.validate()
+        for source in self._sources:
+            source.start()
+
     def run(self, until: float, cli: bool = False, refresh_interval: float = 10.0) -> None:
         if cli:
             from des.viz.cli import run_with_cli
@@ -109,8 +120,40 @@ class QueueingNetwork:
     def graph(self) -> nx.DiGraph:
         return self._graph
 
+    @property
+    def servers(self) -> dict[str, MMcServer]:
+        return self._servers
+
+    def observe(self) -> dict[str, dict]:
+        """Return current per-server state as a plain dict.
+
+        Keys per server: queue_length, busy_servers, utilization.
+        Suitable for constructing gym observation vectors.
+        """
+        return {
+            node_id: {
+                "queue_length": server.queue_length,
+                "busy_servers": server._busy_servers,
+                "utilization": server.utilization,
+            }
+            for node_id, server in self._servers.items()
+        }
+
     def stats(self) -> list[dict]:
         return [s.collector.summary(self.sim.clock) for s in self._servers.values()]
+
+    @classmethod
+    def from_config(cls, config: NetworkConfig) -> QueueingNetwork:
+        net = cls(warm_up_time=config.warm_up_time)
+        for src in config.sources:
+            net.add_source(src.node_id, arrival_rate=src.arrival_rate, next_node_id=src.next_node_id, customer_class=src.customer_class)
+        for srv in config.servers:
+            net.add_server(srv.node_id, service_rate=srv.service_rate, c=srv.c)
+        for sink_id in config.sinks:
+            net.add_sink(sink_id)
+        for u, v in config.edges:
+            net.add_edge(u, v)
+        return net
 
 
 class _RoutedServer(MMcServer):
@@ -145,3 +188,38 @@ class _RoutedServer(MMcServer):
             self._start_service(next_customer)
 
         self._record_snapshot()
+
+@dataclass
+class SourceConfig:
+    node_id: str
+    arrival_rate: float
+    next_node_id: str
+    customer_class: str | None = None
+
+
+@dataclass
+class ServerConfig:
+    node_id: str
+    service_rate: float
+    c: int = 1
+
+
+@dataclass
+class NetworkConfig:
+    warm_up_time: float = 0.0
+    sources: list[SourceConfig] = field(default_factory=list)
+    servers: list[ServerConfig] = field(default_factory=list)
+    sinks: list[str] = field(default_factory=list)
+    edges: list[tuple[str, str]] = field(default_factory=list)
+
+    def add_source(self, node_id: str, arrival_rate: float, next_node_id: str, customer_class: str | None = None) -> None:
+        self.sources.append(SourceConfig(node_id, arrival_rate, next_node_id, customer_class))
+
+    def add_server(self, node_id: str, service_rate: float, c: int = 1) -> None:
+        self.servers.append(ServerConfig(node_id, service_rate, c))
+
+    def add_sink(self, node_id: str) -> None:
+        self.sinks.append(node_id)
+
+    def add_edge(self, src: str, dst: str) -> None:
+        self.edges.append((src, dst))
