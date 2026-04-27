@@ -9,6 +9,7 @@ class EventType(Enum):
     ARRIVAL = auto()
     SERVICE_START = auto()
     DEPARTURE = auto()
+    SCHEDULING_DECISION = auto()
 
 
 @dataclass(order=True, frozen=True)

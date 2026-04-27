@@ -64,6 +64,7 @@ class TimeWeightedAccumulator:
 class Collector:
     """Per-node statistics collector."""
     node_id: str
+    node_kind: str = "server"
     sojourn: WelfordAccumulator = field(default_factory=WelfordAccumulator)
     wait: WelfordAccumulator = field(default_factory=WelfordAccumulator)
     queue_length: TimeWeightedAccumulator = field(default_factory=TimeWeightedAccumulator)
@@ -82,6 +83,7 @@ class Collector:
     def summary(self, current_time: float) -> dict:
         return {
             "node_id": self.node_id,
+            "node_kind": self.node_kind,
             "arrivals": self._arrivals,
             "departures": self._departures,
             "W": self.sojourn.mean,

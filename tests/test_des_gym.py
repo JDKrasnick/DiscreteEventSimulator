@@ -68,6 +68,7 @@ def two_server_config() -> NetworkConfig:
 @pytest.fixture
 def env(two_server_config) -> DiscreteEventGym:
     e = DiscreteEventGym(two_server_config, max_steps=500)
+    random.seed(42)
     e.reset(seed=42)
     return e
 

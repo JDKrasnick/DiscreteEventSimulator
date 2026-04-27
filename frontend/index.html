@@ -1,0 +1,2300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Discrete Event Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+    window.jsxRuntime = {
+      Fragment: React.Fragment,
+      jsx: function(type, props, key) {
+        var p = Object.assign({}, props);
+        if (key !== undefined) p.key = key;
+        var ch = p.children; delete p.children;
+        return ch !== undefined ? React.createElement(type, p, ch) : React.createElement(type, p);
+      },
+      jsxs: function(type, props, key) {
+        var p = Object.assign({}, props);
+        if (key !== undefined) p.key = key;
+        var ch = p.children; delete p.children;
+        return ch !== undefined
+          ? React.createElement.apply(null, [type, p].concat(ch))
+          : React.createElement(type, p);
+      },
+    };
+  </script>
+  <script src="https://unpkg.com/@xyflow/react@12/dist/umd/index.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/@xyflow/react@12/dist/style.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body, #root { height: 100%; margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+
+    /* Design tokens */
+    :root {
+      --bg-base:    #060b14;
+      --bg-surface: #0d1520;
+      --bg-panel:   #111927;
+      --bg-raised:  #192234;
+      --bg-hover:   #1e2a3d;
+      --border:     #1f2f45;
+      --border-mid: #243045;
+      --accent-green:  #22c55e;
+      --accent-blue:   #3b82f6;
+      --accent-purple: #8b5cf6;
+      --accent-amber:  #f59e0b;
+      --text-primary:  #e2e8f0;
+      --text-secondary:#7e96b4;
+      --text-muted:    #4a6180;
+      --mono: 'Fira Code', monospace;
+    }
+
+    body { background: var(--bg-base); color: var(--text-primary); }
+
+    /* React Flow overrides */
+    .react-flow__background { background: var(--bg-surface) !important; }
+    .react-flow__controls { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.4); }
+    .react-flow__controls button { background: var(--bg-panel); border-bottom: 1px solid var(--border); color: var(--text-secondary); transition: background 150ms, color 150ms; }
+    .react-flow__controls button:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .react-flow__minimap { background: var(--bg-panel) !important; border: 1px solid var(--border); border-radius: 8px; }
+    .react-flow__edge-path { stroke: var(--border-mid); }
+    .react-flow__edge.selected .react-flow__edge-path { stroke: var(--accent-blue); }
+    .react-flow__node { overflow: visible !important; }
+    .react-flow__node:hover,
+    .react-flow__node:focus-within { z-index: 1200 !important; }
+
+    /* Nodes */
+    .des-node {
+      position: relative;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: filter 150ms;
+      overflow: visible;
+      z-index: 1;
+    }
+    .des-node:hover { filter: brightness(1.1); }
+    .des-node-tooltip {
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 10px);
+      transform: translate(-50%, 6px);
+      min-width: 110px;
+      max-width: 180px;
+      padding: 8px 9px;
+      border-radius: 8px;
+      background: rgba(6, 11, 20, .97);
+      border: 1px solid rgba(126, 150, 180, .2);
+      box-shadow: 0 14px 36px rgba(0,0,0,.45);
+      color: var(--text-primary);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+      z-index: 1300;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .des-node-tooltip::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 100%;
+      transform: translateX(-50%);
+      border-width: 6px 5px 0 5px;
+      border-style: solid;
+      border-color: rgba(6, 11, 20, .97) transparent transparent transparent;
+    }
+    .des-node:hover .des-node-tooltip,
+    .des-node:focus-within .des-node-tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, 0);
+    }
+    .des-node-tooltip-title {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .55px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    .des-node-tooltip-row {
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--text-primary);
+    }
+    .des-node-tooltip-row + .des-node-tooltip-row {
+      margin-top: 2px;
+    }
+    .des-node-source {
+      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+      border: 1px solid rgba(249,115,22,.4);
+      border-radius: 10px;
+      padding: 10px 16px;
+      min-width: 96px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 12px;
+      color: white;
+      box-shadow: 0 0 20px rgba(249,115,22,.2), 0 4px 12px rgba(0,0,0,.4);
+    }
+    .des-node-server {
+      background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+      border: 1px solid rgba(34,197,94,.3);
+      border-radius: 50%;
+      width: 104px; height: 104px;
+      padding: 12px 10px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-weight: 600; font-size: 11px; color: white;
+      box-shadow: 0 0 20px rgba(34,197,94,.2), 0 4px 12px rgba(0,0,0,.4);
+    }
+    .des-node-sink {
+      background: linear-gradient(135deg, #475569 0%, #334155 100%);
+      border: 1px solid rgba(100,116,139,.3);
+      clip-path: polygon(50% 0%,100% 50%,50% 100%,0% 50%);
+      width: 84px; height: 84px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; font-size: 11px; color: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    }
+    .des-node-selected { outline: 2px solid var(--accent-blue); outline-offset: 4px; border-radius: 6px; }
+
+    /* Toolbar inputs */
+    .tb-input {
+      background: var(--bg-raised);
+      border: 1px solid var(--border-mid);
+      border-radius: 6px;
+      box-sizing: border-box;
+      color: var(--text-primary);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 4px 8px;
+      transition: border-color 150ms;
+      outline: none;
+    }
+    .tb-input:focus { border-color: var(--accent-blue); }
+    .tb-number-input {
+      appearance: textfield;
+      -moz-appearance: textfield;
+      min-width: 68px;
+    }
+    .tb-number-input::-webkit-outer-spin-button,
+    .tb-number-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .tb-select {
+      background: var(--bg-raised);
+      border: 1px solid var(--border-mid);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 12px;
+      padding: 4px 8px;
+      outline: none;
+      cursor: pointer;
+    }
+    .tb-select:disabled,
+    .panel-input:disabled,
+    .panel-select:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    /* Panel inputs */
+    .panel-input {
+      width: 100%;
+      background: var(--bg-raised);
+      border: 1px solid var(--border-mid);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 13px;
+      padding: 6px 10px;
+      outline: none;
+      transition: border-color 150ms;
+      font-family: 'Inter', sans-serif;
+    }
+    .panel-input:focus { border-color: var(--accent-blue); }
+    .panel-select {
+      width: 100%;
+      background: var(--bg-raised);
+      border: 1px solid var(--border-mid);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 13px;
+      padding: 6px 10px;
+      outline: none;
+      cursor: pointer;
+    }
+    .panel-label-row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 5px;
+    }
+    .panel-help {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: help;
+      line-height: 1;
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(96,165,250,.35);
+      background: rgba(59,130,246,.14);
+      color: #93c5fd;
+      font-size: 10px;
+      font-weight: 700;
+      font-family: Georgia, serif;
+      transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+      flex-shrink: 0;
+    }
+    .panel-help:hover,
+    .panel-help:focus-within {
+      background: rgba(59,130,246,.22);
+      border-color: rgba(147,197,253,.55);
+      color: #dbeafe;
+    }
+    .panel-help-bubble {
+      position: absolute;
+      left: clamp(108px, 50%, calc(100% - 108px));
+      top: calc(100% + 8px);
+      transform: translateX(-50%);
+      width: min(220px, calc(100% - 8px));
+      padding: 9px 10px;
+      border-radius: 8px;
+      background: rgba(6, 11, 20, .98);
+      border: 1px solid rgba(126, 150, 180, .2);
+      box-shadow: 0 14px 32px rgba(0,0,0,.45);
+      color: var(--text-secondary);
+      font-size: 11px;
+      line-height: 1.5;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 150ms ease, visibility 150ms ease;
+      z-index: 40;
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 500;
+      white-space: normal;
+    }
+    .panel-help:hover .panel-help-bubble,
+    .panel-help:focus-within .panel-help-bubble {
+      opacity: 1;
+      visibility: visible;
+    }
+    .panel-summary {
+      background: rgba(59,130,246,.06);
+      border: 1px solid rgba(59,130,246,.15);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.55;
+      margin-bottom: 12px;
+    }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 5px; border: none; border-radius: 7px; font-size: 12px; font-weight: 600; padding: 6px 12px; cursor: pointer; transition: filter 150ms, opacity 150ms; white-space: nowrap; font-family: 'Inter', sans-serif; }
+    .btn:hover:not(:disabled) { filter: brightness(1.12); }
+    .btn:disabled { opacity: .38; cursor: not-allowed; }
+    .btn-run    { background: #15803d; color: #bbf7d0; }
+    .btn-step   { background: #1d4ed8; color: #bfdbfe; }
+    .btn-stop   { background: #991b1b; color: #fecaca; }
+    .btn-reset  { background: var(--bg-raised); color: var(--text-secondary); border: 1px solid var(--border-mid); }
+    .btn-template { background: var(--bg-raised); color: var(--text-primary); border: 1px solid var(--border-mid); }
+    .btn-delete-panel { background: rgba(127,29,29,.18); color: #fecaca; border: 1px solid rgba(239,68,68,.22); padding: 5px 8px; }
+
+    /* Divider */
+    .tb-divider { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 4px; }
+
+    /* Tab active indicator */
+    .metrics-tab-active { color: var(--text-primary) !important; border-bottom: 2px solid var(--accent-blue); }
+
+    /* Router info card */
+    .router-info { background: rgba(59,130,246,.06); border: 1px solid rgba(59,130,246,.15); border-radius: 6px; padding: 8px 10px; font-size: 11px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 12px; }
+
+    /* Palette drag item */
+    .palette-item {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg-raised); border: 1px solid var(--border-mid);
+      border-radius: 8px; padding: 8px 10px;
+      width: 100%; cursor: grab; user-select: none;
+      font-size: 11px; font-weight: 600; color: var(--text-secondary);
+      transition: background 150ms, border-color 150ms, color 150ms;
+    }
+    .palette-item:hover { background: var(--bg-hover); border-color: var(--border); color: var(--text-primary); }
+    .palette-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Theory error cells */
+    .err-good   { color: #4ade80; }
+    .err-warn   { color: #fbbf24; }
+    .err-bad    { color: #f87171; }
+
+    /* Util bar */
+    .util-bar-track { width: 100%; background: var(--bg-surface); border-radius: 4px; height: 6px; overflow: hidden; }
+    .util-bar-fill  { height: 6px; border-radius: 4px; transition: width 400ms ease, background 400ms ease; }
+
+    /* Modal overlay */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal-card { background: var(--bg-panel); border: 1px solid var(--border-mid); border-radius: 14px; padding: 24px; width: 380px; box-shadow: 0 24px 64px rgba(0,0,0,.7); }
+
+    /* Stat table row hover */
+    .stat-row:hover { background: var(--bg-raised); }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useCallback, useRef, useEffect } = React;
+const {
+  ReactFlow, ReactFlowProvider,
+  addEdge, Background, Controls, MiniMap, Handle, Position, useReactFlow,
+  MarkerType, applyNodeChanges, applyEdgeChanges,
+} = window.ReactFlow || {};
+
+const HISTORY_LIMIT = 100;
+
+// ── SVG Icons ────────────────────────────────────────────────────────────────
+
+const Icon = ({ d, size = 14, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d={d} />
+  </svg>
+);
+
+const Icons = {
+  Play:      () => <svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>,
+  Stop:      () => <Icon d="M3 3h18v18H3z" />,
+  Step:      () => <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5,4 15,12 5,20"/><line x1="19" y1="4" x2="19" y2="20"/></svg>,
+  Reset:     () => <Icon d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />,
+  Undo:      () => <Icon d="M9 14 4 9l5-5M4 9h8a8 8 0 1 1 0 16h-1" />,
+  Lock:      () => <Icon d="M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5z" />,
+  Unlock:    () => <Icon d="M18 11V8a5 5 0 1 0-10 0M5 11h14v10H5z" />,
+  Templates: () => <Icon d="M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z" />,
+  Upload:    () => <Icon d="M12 3v12M7 8l5-5 5 5M5 21h14" />,
+  Live:      () => <Icon d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+  Stats:     () => <Icon d="M3 3v18h18M7 16l4-4 4 4 4-4" />,
+  Theory:    () => <Icon d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />,
+  Chart:     () => <Icon d="M18 20V10M12 20V4M6 20v-6" />,
+  Source:    () => <svg width={10} height={10} viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>,
+  Buffer:    () => <Icon d="M4 7h16M4 12h16M4 17h16" />,
+  Server:    () => <Icon d="M2 20h20M2 4h20M6 8h12M6 16h12" />,
+  Station:   () => <Icon d="M12 3v18M3 12h18M6 6l12 12M18 6 6 18" />,
+  Sink:      () => <svg width={10} height={10} viewBox="0 0 24 24" fill="currentColor"><polygon points="12,2 22,22 2,22"/></svg>,
+  Info:      () => <Icon d="M12 16v-4M12 8h.01" />,
+  Plus:      () => <Icon d="M12 5v14M5 12h14" />,
+  Trash:     () => <Icon d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" />,
+  X:         () => <Icon d="M18 6 6 18M6 6l12 12" />,
+};
+
+// ── Queueing theory ──────────────────────────────────────────────────────────
+
+function computeMMOneTheory(lambda, mu) {
+  if (lambda >= mu) return null;
+  const rho = lambda / mu;
+  const W  = 1 / (mu - lambda);
+  const Wq = rho / (mu - lambda);
+  const L  = rho / (1 - rho);
+  const Lq = rho * rho / (1 - rho);
+  return { rho, W, Wq, L, Lq };
+}
+
+function erlangC(a, c) {
+  let sum = 0, term = 1;
+  for (let k = 1; k < c; k++) { term *= a / k; sum += term; }
+  const Pc = (term * a / c) / (1 - a / c);
+  return Pc / (sum + 1 + Pc);
+}
+
+function computeMMcTheory(lambda, mu, c) {
+  if (lambda >= c * mu) return null;
+  const a = lambda / mu, rho = a / c;
+  const Pw = erlangC(a, c);
+  const Wq = Pw / (c * mu - lambda);
+  const W  = Wq + 1 / mu;
+  return { rho, W, Wq, L: lambda * W, Lq: lambda * Wq };
+}
+
+// ── Custom nodes ─────────────────────────────────────────────────────────────
+
+const ROUTER_BADGE = {
+  round_robin:  { bg: 'rgba(139,92,246,.9)', label: 'RR' },
+  class_based:  { bg: 'rgba(245,158,11,.9)', label: 'CB' },
+};
+
+const SCHEDULER_BADGE = {
+  round_robin:     { bg: 'rgba(59,130,246,.9)', label: 'RR' },
+  first_non_empty: { bg: 'rgba(245,158,11,.9)', label: 'FNE' },
+  longest_queue:   { bg: 'rgba(34,197,94,.9)', label: 'LQ' },
+};
+
+const SERVER_QUEUE_POLICY_LABEL = {
+  fifo: 'FIFO',
+  fbfs: 'FBFS',
+  lbfs: 'LBFS',
+};
+
+const EMPTY_POLICY_LIBRARY = {
+  server_routing: [],
+  server_queue: [],
+  station_scheduling: [],
+};
+
+function compactPolicyLabel(label, fallback = 'Custom') {
+  const text = String(label || fallback).toUpperCase();
+  return text.length > 8 ? `${text.slice(0, 5)}...` : text;
+}
+
+function getPolicySelectValue(config, fallbackType) {
+  if (config?.type === 'custom' && config.policy_id) return `custom:${config.policy_id}`;
+  return config?.type || fallbackType;
+}
+
+function findPolicyById(policies, policyId) {
+  return (policies || []).find(policy => policy.id === policyId) || null;
+}
+
+function formatPolicySummary(config, builtInLabels, builtInInfo, fallbackType, customKindLabel) {
+  if (config?.type === 'custom') {
+    return {
+      label: config.label || 'Custom',
+      detail: config.description || `${customKindLabel} from the uploaded policy library.`,
+    };
+  }
+  const type = config?.type || fallbackType;
+  return {
+    label: builtInLabels[type] || type,
+    detail: builtInInfo[type] || '',
+  };
+}
+
+function NodeTooltip({ title, rows = [] }) {
+  return (
+    <div className="des-node-tooltip">
+      <div className="des-node-tooltip-title">{title}</div>
+      {rows.map(row => (
+        <div key={row} className="des-node-tooltip-row">{row}</div>
+      ))}
+    </div>
+  );
+}
+
+function isTextEditingElement(element) {
+  if (!element) return false;
+  if (element.isContentEditable) return true;
+  if (typeof element.closest === 'function' && element.closest('[contenteditable="true"]')) return true;
+  const tag = element.tagName?.toUpperCase();
+  if (tag === 'TEXTAREA') return true;
+  if (tag !== 'INPUT') return false;
+  const type = String(element.type || '').toLowerCase();
+  return !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(type);
+}
+
+function cloneValue(value) {
+  if (typeof structuredClone === 'function') return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
+function HelpTooltip({ text }) {
+  return (
+    <span className="panel-help" tabIndex={0}>
+      <span aria-hidden="true">i</span>
+      <span className="panel-help-bubble">{text}</span>
+    </span>
+  );
+}
+
+function SourceNode({ data, selected }) {
+  return (
+    <div className={`des-node des-node-source${selected ? ' des-node-selected' : ''}`}>
+      <NodeTooltip
+        title={data.label}
+        rows={[
+          `lambda=${data.arrival_rate}`,
+          data.customer_class ? `class=${data.customer_class}` : 'class=none',
+        ]}
+      />
+      <div style={{fontSize:9, opacity:.7, letterSpacing:.5, textTransform:'uppercase', marginBottom:2}}>SOURCE</div>
+      <div style={{fontSize:12}}>{data.label}</div>
+      <div style={{fontSize:9, opacity:.65, fontFamily:'var(--mono)', marginTop:1}}>λ={data.arrival_rate}</div>
+      <Handle type="source" position={Position.Right} style={{background:'#f97316', border:'2px solid rgba(255,255,255,.4)', width:8, height:8}} />
+    </div>
+  );
+}
+
+function ServerNode({ data, selected }) {
+  const badge = ROUTER_BADGE[data.router?.type];
+  const queuePolicy = formatPolicySummary(
+    data.queue_policy,
+    SERVER_QUEUE_POLICY_LABEL,
+    SERVER_QUEUE_POLICY_INFO,
+    'fifo',
+    'Server queue policy'
+  );
+  const queuePolicyLabel =
+    data.queue_policy?.type === 'custom'
+      ? compactPolicyLabel(data.queue_policy?.label)
+      : queuePolicy.label;
+  const routerLabel =
+    data.router?.type === 'custom'
+      ? compactPolicyLabel(data.router?.label)
+      : (
+          {
+            probabilistic: 'PROB',
+            round_robin: 'RR',
+            class_based: 'CLASS',
+          }[data.router?.type || 'probabilistic']
+        );
+  return (
+    <div className={`des-node des-node-server${selected ? ' des-node-selected' : ''}`} style={{position:'relative'}}>
+      <NodeTooltip
+        title={data.label}
+        rows={[
+          `mu=${data.service_rate}`,
+          `c=${data.c || 1}`,
+          `Q=${queuePolicyLabel}`,
+          `R=${routerLabel}`,
+        ]}
+      />
+      <Handle type="target" position={Position.Left} style={{left:-6, background:'#22c55e', border:'2px solid rgba(255,255,255,.4)', width:8, height:8}} />
+      {badge && (
+        <div style={{position:'absolute', top:-8, right:-8, background: badge.bg,
+          color:'white', borderRadius:4, fontSize:8, padding:'2px 5px', fontWeight:700, letterSpacing:.5}}>
+          {badge.label}
+        </div>
+      )}
+      <div style={{width:'100%', display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', lineHeight:1.2}}>
+        <div style={{fontSize:10, opacity:.65, letterSpacing:.3, textTransform:'uppercase', marginBottom:3}}>SRV</div>
+        <div style={{fontSize:11, fontWeight:700, maxWidth:'100%', overflowWrap:'anywhere'}}>{data.label}</div>
+        <div style={{fontSize:9, opacity:.7, fontFamily:'var(--mono)', marginTop:5, display:'flex', flexDirection:'column', alignItems:'center', gap:2}}>
+          <div>c={data.c||1}  μ={data.service_rate}</div>
+          <div>Q={queuePolicyLabel}</div>
+        </div>
+      </div>
+      <Handle type="source" position={Position.Right} style={{right:-6, background:'#22c55e', border:'2px solid rgba(255,255,255,.4)', width:8, height:8}} />
+    </div>
+  );
+}
+
+function BufferNode({ data, selected }) {
+  return (
+    <div className={`des-node${selected ? ' des-node-selected' : ''}`} style={{
+      position:'relative',
+      minWidth:96,
+      padding:'10px 14px',
+      borderRadius:12,
+      background:'linear-gradient(135deg, #0f766e 0%, #115e59 100%)',
+      border:'1px solid rgba(45,212,191,.25)',
+      boxShadow:'0 0 20px rgba(20,184,166,.15), 0 4px 12px rgba(0,0,0,.4)',
+      color:'white',
+      textAlign:'center',
+    }}>
+      <NodeTooltip
+        title={data.label}
+        rows={['queue only']}
+      />
+      <Handle type="target" position={Position.Left} style={{left:-6, background:'#14b8a6', border:'2px solid rgba(255,255,255,.4)', width:8, height:8}} />
+      <div style={{fontSize:9, opacity:.65, letterSpacing:.5, textTransform:'uppercase', marginBottom:2}}>BUFFER</div>
+      <div style={{fontSize:12, fontWeight:700}}>{data.label}</div>
+      <div style={{fontSize:9, opacity:.6, fontFamily:'var(--mono)', marginTop:2}}>queue only</div>
+      <Handle type="source" position={Position.Right} style={{right:-6, background:'#14b8a6', border:'2px solid rgba(255,255,255,.4)', width:8, height:8}} />
+    </div>
+  );
+}
+
+function StationNode({ data, selected }) {
+  const badge = SCHEDULER_BADGE[data.scheduler?.type || 'round_robin'];
+  const schedulerLabel =
+    data.scheduler?.type === 'custom'
+      ? compactPolicyLabel(data.scheduler?.label)
+      : (
+          {
+            round_robin: 'RR',
+            first_non_empty: 'FNE',
+            longest_queue: 'LQ',
+          }[data.scheduler?.type || 'round_robin']
+        );
+  return (
+    <div className={`des-node${selected ? ' des-node-selected' : ''}`} style={{
+      position:'relative',
+      width:104,
+      height:104,
+      padding:'12px 10px',
+      borderRadius:24,
+      background:'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+      border:'1px solid rgba(96,165,250,.28)',
+      display:'flex',
+      flexDirection:'column',
+      alignItems:'center',
+      justifyContent:'center',
+      color:'white',
+      boxShadow:'0 0 20px rgba(37,99,235,.18), 0 4px 12px rgba(0,0,0,.4)',
+    }}>
+      <NodeTooltip
+        title={data.label}
+        rows={[
+          `mu=${data.service_rate}`,
+          `c=${data.c || 1}`,
+          `S=${schedulerLabel}`,
+        ]}
+      />
+      <Handle type="target" position={Position.Left} style={{left:-6, background:'#3b82f6', border:'2px solid rgba(255,255,255,.4)', width:8, height:8}} />
+      {badge && (
+        <div style={{position:'absolute', top:-8, right:-8, background: badge.bg,
+          color:'white', borderRadius:4, fontSize:8, padding:'2px 5px', fontWeight:700, letterSpacing:.5}}>
+          {badge.label}
+        </div>
+      )}
+      <div style={{width:'100%', display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', lineHeight:1.2}}>
+        <div style={{fontSize:10, opacity:.65, letterSpacing:.3, textTransform:'uppercase', marginBottom:3}}>STN</div>
+        <div style={{fontSize:11, fontWeight:700, maxWidth:'100%', overflowWrap:'anywhere'}}>{data.label}</div>
+        <div style={{fontSize:9, opacity:.7, fontFamily:'var(--mono)', marginTop:5, display:'flex', flexDirection:'column', alignItems:'center', gap:2}}>
+          <div>c={data.c||1}</div>
+          <div>μ={data.service_rate}</div>
+        </div>
+      </div>
+      <Handle type="source" position={Position.Right} style={{right:-6, background:'#3b82f6', border:'2px solid rgba(255,255,255,.4)', width:8, height:8}} />
+    </div>
+  );
+}
+
+function SinkNode({ data, selected }) {
+  return (
+    <div className={`des-node${selected ? ' des-node-selected' : ''}`} style={{position:'relative', width:84, height:84}}>
+      <NodeTooltip
+        title={data.label}
+        rows={['terminal']}
+      />
+      <Handle type="target" position={Position.Left} style={{left:-6, top:'50%', background:'#475569', border:'2px solid rgba(255,255,255,.4)', width:8, height:8}} />
+      <div className="des-node-sink" style={{position:'absolute', inset:0}}>
+        <div style={{
+          position:'absolute',
+          top:'50%',
+          left:8,
+          transform:'translate(-50%, -50%)',
+          width:8,
+          height:8,
+          borderRadius:'50%',
+          background:'rgba(226,232,240,.9)',
+          boxShadow:'0 0 0 3px rgba(71,85,105,.35)',
+          pointerEvents:'none',
+        }} />
+        <div style={{textAlign:'center', position:'relative', zIndex:1}}>
+          <div style={{fontSize:9, opacity:.7, letterSpacing:.5, textTransform:'uppercase'}}>SINK</div>
+          <div style={{fontSize:11}}>{data.label}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const nodeTypes = { source: SourceNode, server: ServerNode, buffer: BufferNode, station: StationNode, sink: SinkNode };
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+let _nodeCounter = 0;
+function newId(prefix) { return `${prefix}_${++_nodeCounter}`; }
+
+function defaultNodeData(type, id) {
+  if (type === 'source') return { label: id, arrival_rate: 1.0, customer_class: '', next_node_id: '' };
+  if (type === 'server') return { label: id, service_rate: 1.0, c: 1, router: { type: 'probabilistic' }, queue_policy: { type: 'fifo' } };
+  if (type === 'buffer') return { label: id };
+  if (type === 'station') return { label: id, service_rate: 1.0, c: 1, scheduler: { type: 'round_robin' } };
+  return { label: id };
+}
+
+// ── Templates ────────────────────────────────────────────────────────────────
+
+const TEMPLATES = [
+  {
+    name: 'M/M/1', tag: 'Single server',
+    meta: 'λ=0.8  μ=1.0  ρ=0.80', warmUp: 500, defaultRouter: 'probabilistic',
+    nodes: [
+      { id:'src_t1', type:'source', position:{x:60,y:150},  data:{label:'src_t1', arrival_rate:0.8, customer_class:'', next_node_id:''} },
+      { id:'srv_t1', type:'server', position:{x:270,y:120}, data:{label:'srv_t1', service_rate:1.0, c:1, router:{type:'probabilistic'}} },
+      { id:'snk_t1', type:'sink',   position:{x:480,y:150}, data:{label:'snk_t1'} },
+    ],
+    edges: [
+      { id:'e_t1_1', source:'src_t1', target:'srv_t1', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t1_2', source:'srv_t1', target:'snk_t1', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+    ],
+  },
+  {
+    name: 'M/M/c', tag: '3-server queue',
+    meta: 'λ=2.0  μ=1.0  c=3  ρ=0.67', warmUp: 1000, defaultRouter: 'probabilistic',
+    nodes: [
+      { id:'src_t2', type:'source', position:{x:60,y:150},  data:{label:'src_t2', arrival_rate:2.0, customer_class:'', next_node_id:''} },
+      { id:'srv_t2', type:'server', position:{x:270,y:120}, data:{label:'srv_t2', service_rate:1.0, c:3, router:{type:'probabilistic'}} },
+      { id:'snk_t2', type:'sink',   position:{x:480,y:150}, data:{label:'snk_t2'} },
+    ],
+    edges: [
+      { id:'e_t2_1', source:'src_t2', target:'srv_t2', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t2_2', source:'srv_t2', target:'snk_t2', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+    ],
+  },
+  {
+    name: 'Tandem', tag: 'Two servers in series',
+    meta: 'λ=0.5  μ₁=1.0  μ₂=0.8', warmUp: 1000, defaultRouter: 'probabilistic',
+    nodes: [
+      { id:'src_t3',  type:'source', position:{x:40,y:150},  data:{label:'src_t3',  arrival_rate:0.5, customer_class:'', next_node_id:''} },
+      { id:'srv_t3a', type:'server', position:{x:220,y:120}, data:{label:'srv_t3a', service_rate:1.0, c:1, router:{type:'probabilistic'}} },
+      { id:'srv_t3b', type:'server', position:{x:400,y:120}, data:{label:'srv_t3b', service_rate:0.8, c:1, router:{type:'probabilistic'}} },
+      { id:'snk_t3',  type:'sink',   position:{x:580,y:150}, data:{label:'snk_t3'} },
+    ],
+    edges: [
+      { id:'e_t3_1', source:'src_t3',  target:'srv_t3a', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t3_2', source:'srv_t3a', target:'srv_t3b', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t3_3', source:'srv_t3b', target:'snk_t3',  data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+    ],
+  },
+  {
+    name: 'Criss-Cross', tag: 'Shared server by class',
+    meta: 'λ₁=0.3  λ₃=0.2  μ₁=1.0  μ₂=0.8', warmUp: 500, defaultRouter: 'probabilistic', selectedNodeId: 'S1',
+    nodes: [
+      { id:'class1_src',  type:'source', position:{x:40,y:80},  data:{label:'class1_src', arrival_rate:0.3, customer_class:'class1', next_node_id:'S1'} },
+      { id:'class3_src',  type:'source', position:{x:40,y:230}, data:{label:'class3_src', arrival_rate:0.2, customer_class:'class3', next_node_id:'S1'} },
+      { id:'S1',          type:'server', position:{x:240,y:150}, data:{label:'S1', service_rate:1.0, c:1, router:{type:'class_based', class_map:{class1:'S2', class3:'sink_class3'}}} },
+      { id:'S2',          type:'server', position:{x:430,y:80},  data:{label:'S2', service_rate:0.8, c:1, router:{type:'probabilistic'}} },
+      { id:'sink_class2', type:'sink',   position:{x:620,y:80},  data:{label:'sink_class2'} },
+      { id:'sink_class3', type:'sink',   position:{x:430,y:250}, data:{label:'sink_class3'} },
+    ],
+    edges: [
+      { id:'e_t4_1', source:'class1_src', target:'S1',          data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t4_2', source:'class3_src', target:'S1',          data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t4_3', source:'S1',         target:'S2',          data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t4_4', source:'S1',         target:'sink_class3', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t4_5', source:'S2',         target:'sink_class2', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+    ],
+  },
+  {
+    name: 'Shared Station', tag: 'Explicit buffers + scheduler',
+    meta: 'λ₁=0.9  λ₂=0.4  μ=1.5  2 buffers -> 1 station', warmUp: 500, defaultRouter: 'probabilistic',
+    nodes: [
+      { id:'src_buf_1', type:'source', position:{x:30,y:80},  data:{label:'src_buf_1', arrival_rate:0.9, customer_class:'', next_node_id:'B1'} },
+      { id:'src_buf_2', type:'source', position:{x:30,y:220}, data:{label:'src_buf_2', arrival_rate:0.4, customer_class:'', next_node_id:'B2'} },
+      { id:'B1',        type:'buffer', position:{x:220,y:80},  data:{label:'B1'} },
+      { id:'B2',        type:'buffer', position:{x:220,y:220}, data:{label:'B2'} },
+      { id:'SharedStation', type:'station', position:{x:430,y:150}, data:{label:'SharedStation', service_rate:1.5, c:1, scheduler:{type:'longest_queue'}} },
+      { id:'shared_sink',   type:'sink',    position:{x:640,y:150}, data:{label:'shared_sink'} },
+    ],
+    edges: [
+      { id:'e_t5_1', source:'src_buf_1', target:'B1', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t5_2', source:'src_buf_2', target:'B2', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t5_3', source:'B1', target:'SharedStation', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t5_4', source:'B2', target:'SharedStation', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t5_5', source:'SharedStation', target:'shared_sink', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+    ],
+  },
+  {
+    name: 'Rybko-Stolyar', tag: 'Cross-coupled shared stations',
+    meta: 'λ₁=0.45  λ₃=0.45  4 buffers  2 stations  staged re-entry', warmUp: 1000, defaultRouter: 'probabilistic', selectedNodeId: 'RS_R1',
+    nodes: [
+      { id:'RS_src1', type:'source', position:{x:30,y:70},  data:{label:'RS_src1', arrival_rate:0.45, customer_class:'class1', next_node_id:'RS_B1'} },
+      { id:'RS_src3', type:'source', position:{x:30,y:260}, data:{label:'RS_src3', arrival_rate:0.45, customer_class:'class3', next_node_id:'RS_B3'} },
+      { id:'RS_B1', type:'buffer', position:{x:190,y:35},  data:{label:'RS_B1'} },
+      { id:'RS_B4', type:'buffer', position:{x:190,y:245}, data:{label:'RS_B4'} },
+      { id:'RS_ST1', type:'station', position:{x:190,y:140}, data:{label:'RS_ST1', service_rate:1.0, c:1, scheduler:{type:'longest_queue'}} },
+      { id:'RS_R1', type:'server', position:{x:355,y:140}, data:{label:'RS_R1', service_rate:50.0, c:1, router:{type:'class_based', class_map:{class1:'RS_B2'}, fallback:'RS_sink'}} },
+      { id:'RS_B2', type:'buffer', position:{x:500,y:35},  data:{label:'RS_B2'} },
+      { id:'RS_B3', type:'buffer', position:{x:500,y:245}, data:{label:'RS_B3'} },
+      { id:'RS_ST2', type:'station', position:{x:500,y:140}, data:{label:'RS_ST2', service_rate:1.0, c:1, scheduler:{type:'longest_queue'}} },
+      { id:'RS_R2', type:'server', position:{x:655,y:140}, data:{label:'RS_R2', service_rate:50.0, c:1, router:{type:'class_based', class_map:{class3:'RS_B4'}, fallback:'RS_sink'}} },
+      { id:'RS_sink', type:'sink', position:{x:815,y:140}, data:{label:'RS_sink'} },
+    ],
+    edges: [
+      { id:'e_t6_1', source:'RS_src1', target:'RS_B1', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t6_2', source:'RS_src3', target:'RS_B3', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t6_3', source:'RS_B1', target:'RS_ST1', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t6_4', source:'RS_B4', target:'RS_ST1', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t6_5', source:'RS_ST1', target:'RS_R1', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t6_6', source:'RS_R1', target:'RS_B2', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t6_7', source:'RS_R1', target:'RS_sink', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t6_8', source:'RS_B2', target:'RS_ST2', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t6_9', source:'RS_B3', target:'RS_ST2', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t6_10', source:'RS_ST2', target:'RS_R2', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t6_11', source:'RS_R2', target:'RS_B4', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+      { id:'e_t6_12', source:'RS_R2', target:'RS_sink', data:{weight:1.0}, label:'1.0', markerEnd:{type:'arrowclosed',color:'#334155'}, style:{stroke:'#334155'} },
+    ],
+  },
+];
+
+function PresetTemplates({ onLoad }) {
+  return (
+    <div className="modal-overlay" onClick={() => onLoad(null)}>
+      <div className="modal-card" onClick={e => e.stopPropagation()}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20}}>
+          <div>
+            <div style={{fontSize:15, fontWeight:700, color:'var(--text-primary)'}}>Preset Templates</div>
+            <div style={{fontSize:11, color:'var(--text-muted)', marginTop:2}}>Load a pre-built queueing network</div>
+          </div>
+          <button onClick={() => onLoad(null)} style={{background:'none',border:'none',color:'var(--text-muted)',cursor:'pointer',padding:4}} title="Close">
+            <Icons.X />
+          </button>
+        </div>
+        <div style={{display:'flex', flexDirection:'column', gap:8}}>
+          {TEMPLATES.map(t => (
+            <button key={t.name} onClick={() => onLoad(t)} style={{
+              textAlign:'left', background:'var(--bg-raised)', border:'1px solid var(--border-mid)',
+              borderRadius:10, padding:'12px 14px', cursor:'pointer', transition:'border-color 150ms, background 150ms',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor='rgba(59,130,246,.5)'; e.currentTarget.style.background='var(--bg-hover)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border-mid)'; e.currentTarget.style.background='var(--bg-raised)'; }}
+            >
+              <div style={{display:'flex', alignItems:'baseline', gap:8, marginBottom:4}}>
+                <span style={{fontSize:13, fontWeight:700, color:'var(--text-primary)', fontFamily:'var(--mono)'}}>{t.name}</span>
+                <span style={{fontSize:11, color:'var(--text-muted)'}}>{t.tag}</span>
+              </div>
+              <div style={{fontSize:11, color:'var(--text-secondary)', fontFamily:'var(--mono)'}}>{t.meta}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PolicyGroup({ title, subtitle, policies }) {
+  return (
+    <div style={{marginBottom:14}}>
+      <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:6}}>
+        <div style={{fontSize:12, fontWeight:700, color:'var(--text-primary)'}}>{title}</div>
+        <div style={{fontSize:10, color:'var(--text-muted)'}}>{subtitle}</div>
+      </div>
+      <div style={{display:'flex', flexDirection:'column', gap:6}}>
+        {policies.length === 0 ? (
+          <div style={{
+            padding:'10px 12px',
+            background:'var(--bg-raised)',
+            border:'1px solid var(--border-mid)',
+            borderRadius:8,
+            color:'var(--text-muted)',
+            fontSize:11,
+            lineHeight:1.5,
+          }}>
+            No uploaded policies yet.
+          </div>
+        ) : policies.map(policy => (
+          <div key={policy.id} style={{
+            padding:'10px 12px',
+            background:'var(--bg-raised)',
+            border:'1px solid var(--border-mid)',
+            borderRadius:8,
+          }}>
+            <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', gap:8}}>
+              <div style={{fontSize:12, fontWeight:700, color:'var(--text-primary)', fontFamily:'var(--mono)'}}>{policy.name}</div>
+              <div style={{fontSize:10, color:'var(--text-muted)', fontFamily:'var(--mono)'}}>{policy.source_file}</div>
+            </div>
+            <div style={{fontSize:11, color:'var(--text-secondary)', marginTop:4, lineHeight:1.5}}>
+              {policy.description || 'Uploaded custom policy.'}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PolicyLibraryModal({ policies, onClose, onUpload, uploading, error }) {
+  const [selectedFile, setSelectedFile] = useState(null);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={e => e.stopPropagation()} style={{width:520, maxHeight:'80vh', overflowY:'auto'}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18}}>
+          <div>
+            <div style={{fontSize:15, fontWeight:700, color:'var(--text-primary)'}}>Policy Library</div>
+            <div style={{fontSize:11, color:'var(--text-muted)', marginTop:2}}>
+              Upload Python policy files and choose them by node type and direction.
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:'none',border:'none',color:'var(--text-muted)',cursor:'pointer',padding:4}} title="Close">
+            <Icons.X />
+          </button>
+        </div>
+
+        <div style={{
+          background:'var(--bg-raised)',
+          border:'1px solid var(--border-mid)',
+          borderRadius:10,
+          padding:'12px 14px',
+          marginBottom:16,
+        }}>
+          <div style={{fontSize:12, fontWeight:700, color:'var(--text-primary)', marginBottom:6}}>Upload Policy File</div>
+          <div style={{fontSize:11, color:'var(--text-secondary)', lineHeight:1.5, marginBottom:10}}>
+            Define any of `ROUTERS`, `SERVER_QUEUE_POLICIES`, or `STATION_SCHEDULERS` in a `.py` file. Each entry should be a zero-argument class or factory that returns the matching policy type.
+          </div>
+          <div style={{display:'flex', gap:8, alignItems:'center'}}>
+            <input
+              type="file"
+              accept=".py"
+              onChange={e => setSelectedFile(e.target.files?.[0] || null)}
+              style={{flex:1, fontSize:11, color:'var(--text-secondary)'}}
+            />
+            <button
+              className="btn btn-template"
+              disabled={!selectedFile || uploading}
+              onClick={() => selectedFile && onUpload(selectedFile)}
+            >
+              <Icons.Upload size={12} /> {uploading ? 'Uploading...' : 'Upload'}
+            </button>
+          </div>
+          {error && (
+            <div style={{marginTop:10, fontSize:11, color:'#fca5a5', lineHeight:1.5}}>
+              {error}
+            </div>
+          )}
+        </div>
+
+        <PolicyGroup
+          title="Downstream / Server Routing"
+          subtitle="Server nodes"
+          policies={policies.server_routing || []}
+        />
+        <PolicyGroup
+          title="Local / Server Queue"
+          subtitle="Server nodes"
+          policies={policies.server_queue || []}
+        />
+        <PolicyGroup
+          title="Upstream / Station Scheduling"
+          subtitle="Station nodes"
+          policies={policies.station_scheduling || []}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Live metrics ─────────────────────────────────────────────────────────────
+
+function LiveMetricsPanel({ servers, buffers, stations, stats }) {
+  const serverEntries = Object.entries(servers || {});
+  const bufferEntries = Object.entries(buffers || {});
+  const stationEntries = Object.entries(stations || {});
+  if (serverEntries.length === 0 && bufferEntries.length === 0 && stationEntries.length === 0) return (
+    <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--text-muted)', fontSize:12}}>
+      Run the simulation to see live metrics.
+    </div>
+  );
+  const statsMap = {};
+  (stats || []).forEach(r => { statsMap[r.node_id] = r; });
+  const cards = [
+    ...bufferEntries.map(([id, buffer]) => ({ kind:'buffer', id, state:buffer })),
+    ...stationEntries.map(([id, station]) => ({ kind:'station', id, state:station })),
+    ...serverEntries.map(([id, server]) => ({ kind:'server', id, state:server })),
+  ];
+  return (
+    <div style={{display:'flex', gap:8, padding:10, overflowX:'auto', height:'100%', alignItems:'stretch'}}>
+      {cards.map(({ kind, id, state }) => {
+        const util = Math.min(1, state.utilization ?? 0);
+        const pct  = (util * 100).toFixed(1);
+        const hue  = Math.round((1 - util) * 120);
+        const row  = statsMap[id] || {};
+        const titleColor =
+          kind === 'buffer' ? '#5eead4' :
+          kind === 'station' ? '#93c5fd' : 'var(--text-primary)';
+        return (
+          <div key={`${kind}-${id}`} style={{
+            background:'var(--bg-raised)', border:'1px solid var(--border-mid)', borderRadius:10,
+            padding:'10px 14px', minWidth:148, flex:1, display:'flex', flexDirection:'column', gap:6,
+          }}>
+            <div style={{fontSize:11, fontWeight:700, color:titleColor, fontFamily:'var(--mono)'}}>{id}</div>
+            <div style={{fontSize:10, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:.4}}>
+              {kind}
+            </div>
+            {kind !== 'buffer' && (
+              <div>
+                <div style={{display:'flex', justifyContent:'space-between', marginBottom:4}}>
+                  <span style={{fontSize:10, color:'var(--text-muted)'}}>Utilization</span>
+                  <span style={{fontSize:10, fontFamily:'var(--mono)', color: util > .8 ? '#f87171' : util > .5 ? '#fbbf24' : '#4ade80'}}>{pct}%</span>
+                </div>
+                <div className="util-bar-track">
+                  <div className="util-bar-fill" style={{width:`${pct}%`, background:`hsl(${hue},60%,45%)`}} />
+                </div>
+              </div>
+            )}
+            <div style={{display:'flex', gap:12, fontSize:10, color:'var(--text-secondary)'}}>
+              {(kind === 'buffer' || kind === 'server') && (
+                <span>Queue <span style={{color:'var(--text-primary)', fontFamily:'var(--mono)'}}>{state.queue_length ?? 0}</span></span>
+              )}
+              {kind === 'station' && (
+                <>
+                  <span>Busy <span style={{color:'var(--text-primary)', fontFamily:'var(--mono)'}}>{state.busy_servers ?? 0}</span></span>
+                  <span>Done <span style={{color:'var(--text-primary)', fontFamily:'var(--mono)'}}>{state.completed_jobs ?? 0}</span></span>
+                </>
+              )}
+              {kind !== 'station' && row.arrivals != null && <>
+                <span>Arr <span style={{color:'var(--text-primary)', fontFamily:'var(--mono)'}}>{row.arrivals}</span></span>
+                <span>Dep <span style={{color:'var(--text-primary)', fontFamily:'var(--mono)'}}>{row.departures}</span></span>
+              </>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Theoretical comparison ────────────────────────────────────────────────────
+
+function TheoreticalComparison({ nodes, edges, stats }) {
+  const statsMap = {};
+  (stats || []).forEach(r => { statsMap[r.node_id] = r; });
+  const sourceNodes = nodes.filter(n => n.type === 'source');
+  const serverNodes = nodes.filter(n => n.type === 'server');
+  const rows = [];
+
+  serverNodes.forEach(srv => {
+    const inEdges = edges.filter(e => e.target === srv.id);
+    let lambda = null;
+    if (sourceNodes.length === 1) {
+      lambda = Number(sourceNodes[0].data.arrival_rate);
+    } else if (inEdges.length > 0) {
+      const direct = inEdges.map(e => nodes.find(n => n.id === e.source)).filter(n => n?.type === 'source');
+      if (direct.length === inEdges.length) lambda = direct.reduce((s,n) => s + Number(n.data.arrival_rate), 0);
+    }
+    const mu = Number(srv.data.service_rate) || 1, c = Number(srv.data.c) || 1;
+    const theory = lambda == null ? null : (c === 1 ? computeMMOneTheory(lambda, mu) : computeMMcTheory(lambda, mu, c));
+    const sim = statsMap[srv.id];
+
+    ['L','Lq','W','Wq'].forEach(metric => {
+      const sv2  = sim ? sim[metric] : null;
+      const th   = theory ? theory[metric] : null;
+      const errPct = sv2 != null && th != null && th !== 0 ? Math.abs(sv2 - th) / th * 100 : null;
+      const errCls = errPct == null ? '' : errPct < 10 ? 'err-good' : errPct < 30 ? 'err-warn' : 'err-bad';
+      rows.push({ node: srv.id, metric, sv: sv2, th, errPct, errCls });
+    });
+  });
+
+  if (rows.length === 0) {
+    const hasExplicitScheduling = nodes.some(n => n.type === 'buffer' || n.type === 'station');
+    return (
+      <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--text-muted)', fontSize:12, textAlign:'center', padding:'0 16px'}}>
+        {hasExplicitScheduling
+          ? 'No analytic comparison is available for explicit buffer/station scheduling models in this view.'
+          : 'Add server nodes to see M/M/1 or M/M/c theoretical values.'}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{overflowX:'auto', height:'100%'}}>
+      <table style={{width:'100%', borderCollapse:'collapse', fontSize:11}}>
+        <thead>
+          <tr style={{borderBottom:'1px solid var(--border)'}}>
+            {['Node','Metric','Simulation','Theory','Error'].map(h => (
+              <th key={h} style={{padding:'6px 10px', textAlign: h === 'Node' || h === 'Metric' ? 'left' : 'right', color:'var(--text-muted)', fontWeight:600, fontSize:10, letterSpacing:.5, textTransform:'uppercase'}}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="stat-row" style={{borderBottom:'1px solid var(--border)'}}>
+              <td style={{padding:'5px 10px', color:'var(--text-secondary)', fontFamily:'var(--mono)', fontSize:10}}>{r.node}</td>
+              <td style={{padding:'5px 10px', fontWeight:600, color:'var(--text-primary)'}}>{r.metric}</td>
+              <td style={{padding:'5px 10px', textAlign:'right', fontFamily:'var(--mono)'}}>{r.sv != null ? r.sv.toFixed(3) : '—'}</td>
+              <td style={{padding:'5px 10px', textAlign:'right', fontFamily:'var(--mono)', color:'var(--text-secondary)'}}>{r.th != null ? r.th.toFixed(3) : '—'}</td>
+              <td style={{padding:'5px 10px', textAlign:'right', fontFamily:'var(--mono)'}} className={r.errCls}>{r.errPct != null ? r.errPct.toFixed(1)+'%' : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Stats table ───────────────────────────────────────────────────────────────
+
+function StatsTable({ stats }) {
+  if (!stats || stats.length === 0) return (
+    <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--text-muted)', fontSize:12}}>
+      No statistics yet. Run the simulation.
+    </div>
+  );
+  const cols = ['node_id','node_kind','arrivals','departures','L','Lq','W','Wq'];
+  return (
+    <div style={{overflowX:'auto', height:'100%'}}>
+      <table style={{width:'100%', borderCollapse:'collapse', fontSize:11}}>
+        <thead>
+          <tr style={{borderBottom:'1px solid var(--border)'}}>
+            {cols.map(c => (
+              <th key={c} style={{padding:'6px 10px', textAlign:'left', color:'var(--text-muted)', fontWeight:600, fontSize:10, letterSpacing:.5, textTransform:'uppercase', whiteSpace:'nowrap'}}>{c}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {stats.map(row => (
+            <tr key={row.node_id} className="stat-row" style={{borderBottom:'1px solid var(--border)'}}>
+              {cols.map(c => (
+                <td key={c} style={{padding:'5px 10px', fontFamily: c === 'node_id' ? 'var(--mono)' : 'inherit', color: c === 'node_id' ? 'var(--text-secondary)' : 'var(--text-primary)', fontSize:11}}>
+                  {typeof row[c] === 'number' ? row[c].toFixed(3) : (row[c] ?? '—')}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Queue chart ───────────────────────────────────────────────────────────────
+
+function QueueChart({ chartRef }) {
+  return (
+    <div style={{padding:'8px 10px', height:'100%', display:'flex', flexDirection:'column'}}>
+      <div style={{fontSize:10, color:'var(--text-muted)', marginBottom:4, textTransform:'uppercase', letterSpacing:.5, fontWeight:600}}>Queue Length over Time</div>
+      <div style={{flex:1, minHeight:0}}>
+        <canvas ref={chartRef} style={{maxHeight:'100%'}} />
+      </div>
+    </div>
+  );
+}
+
+// ── Class map editor ──────────────────────────────────────────────────────────
+
+function ClassMapEditor({ classMap, onChange, availableClasses = [], targetOptions = [] }) {
+  const entries = Object.entries(classMap || {});
+  const [newCls, setNewCls] = useState('');
+  const [newTarget, setNewTarget] = useState(targetOptions[0] || '');
+  const unusedClasses = availableClasses.filter(cls => !(cls in (classMap || {})));
+
+  useEffect(() => {
+    if (!targetOptions.includes(newTarget)) {
+      setNewTarget(targetOptions[0] || '');
+    }
+  }, [newTarget, targetOptions]);
+
+  return (
+    <div style={{marginTop:6}}>
+      <div style={{fontSize:10, color:'var(--text-muted)', marginBottom:6, textTransform:'uppercase', letterSpacing:.5, fontWeight:600}}>Class → Target</div>
+      {entries.map(([cls, tgt]) => (
+        <div key={cls} style={{display:'flex', alignItems:'center', gap:4, marginBottom:4}}>
+          <input className="panel-input" style={{flex:1, fontSize:11}} value={cls} readOnly />
+          <span style={{color:'var(--text-muted)', fontSize:11, flexShrink:0}}>→</span>
+          <select className="panel-select" style={{flex:1, fontSize:11}}
+            value={tgt}
+            onChange={e => onChange({ ...classMap, [cls]: e.target.value })}>
+            {[...new Set([tgt, ...targetOptions].filter(Boolean))].map(target => (
+              <option key={target} value={target}>{target}</option>
+            ))}
+          </select>
+          <button onClick={() => { const m = {...classMap}; delete m[cls]; onChange(m); }}
+            style={{background:'none', border:'none', color:'#f87171', cursor:'pointer', padding:'2px 4px', display:'flex', alignItems:'center'}} title="Remove">
+            <Icons.X />
+          </button>
+        </div>
+      ))}
+      {unusedClasses.length > 0 && (
+        <div style={{fontSize:10, color:'var(--text-muted)', margin:'8px 0 6px'}}>
+          Suggested classes: {unusedClasses.join(', ')}
+        </div>
+      )}
+      <div style={{display:'flex', alignItems:'center', gap:4, marginTop:4}}>
+        <input list="known-routing-classes" placeholder="class" className="panel-input" style={{flex:1, fontSize:11}}
+          value={newCls} onChange={e => setNewCls(e.target.value)} />
+        <datalist id="known-routing-classes">
+          {unusedClasses.map(cls => <option key={cls} value={cls} />)}
+        </datalist>
+        <select className="panel-select" style={{flex:1, fontSize:11}}
+          value={newTarget}
+          onChange={e => setNewTarget(e.target.value)}>
+          {targetOptions.length === 0 ? (
+            <option value="">No downstream targets</option>
+          ) : (
+            targetOptions.map(target => <option key={target} value={target}>{target}</option>)
+          )}
+        </select>
+        <button onClick={() => {
+          const cls = newCls.trim();
+          if (cls && newTarget) {
+            onChange({...classMap, [cls]: newTarget});
+            setNewCls('');
+          }
+        }}
+          style={{background:'none', border:'none', color:'var(--accent-green)', cursor:'pointer', padding:'2px 4px', display:'flex', alignItems:'center'}} title="Add">
+          <Icons.Plus />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Properties panel ──────────────────────────────────────────────────────────
+
+const ROUTER_INFO = {
+  probabilistic: 'Each departure picks a downstream node at random. Edge weights set the probability — e.g. weights 2 and 1 send ~67% left and ~33% right.',
+  round_robin:   'Cycles through downstream nodes in order, one customer at a time. Distributes load evenly regardless of edge weights.',
+  class_based:   "Routes by the customer's class tag. Each class is mapped to a specific downstream node. If a fallback target is present, unmatched classes go there; otherwise the network raises an error.",
+};
+
+const SERVER_QUEUE_POLICY_INFO = {
+  fifo: 'Serves the oldest waiting job first. This is the default when queue policy is omitted.',
+  fbfs: 'Serves the waiting job with the smallest stage value first, breaking ties by queue order.',
+  lbfs: 'Serves the waiting job with the largest stage value first, breaking ties by queue order.',
+};
+
+const SCHEDULER_INFO = {
+  round_robin: 'Cycles service attempts across upstream buffers. If the chosen buffer is empty, the station falls through to the next non-empty buffer.',
+  first_non_empty: 'Always scans buffers in order and serves the first one that has waiting work.',
+  longest_queue: 'Picks the upstream buffer with the largest queue, breaking ties by buffer order.',
+};
+
+const NODE_PANEL_INFO = {
+  source: 'Sources create incoming customers. They define how fast work arrives, optionally tag a customer class, and can point to an initial downstream node.',
+  server: 'Servers own an internal queue and process jobs with one or more parallel service slots. Queue policy controls which waiting job starts next, while routing policy controls where completed jobs go.',
+  buffer: 'Buffers only hold queued work. They do not process jobs themselves; connected stations pull customers out of them.',
+  station: 'Stations provide shared service capacity for one or more upstream buffers. The scheduling policy decides which buffer gets served next.',
+  sink: 'Sinks terminate completed work and collect finished customers leaving the network.',
+  edge: 'Edges connect nodes. Their weight is used by probabilistic routing policies to determine how often traffic follows that path.',
+};
+
+function PropertiesPanel({ selected, onUpdate, onDelete, nodes, edges, customPolicies, isLocked }) {
+  if (!selected) return (
+    <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', gap:8, padding:20}}>
+      <div style={{color:'var(--text-muted)', fontSize:13, textAlign:'center', lineHeight:1.6}}>
+        Click a node or edge to inspect and edit its properties.
+      </div>
+    </div>
+  );
+
+  const { type: nodeType, data } = selected;
+  const labelMap = { source: 'Source', server: 'Server', buffer: 'Buffer', station: 'Station', sink: 'Sink', edge: 'Edge' };
+  const sourceClasses = [...new Set(
+    (nodes || [])
+      .filter(n => n.type === 'source')
+      .map(n => (n.data?.customer_class || '').trim())
+      .filter(Boolean)
+  )];
+  const downstreamTargets = [...new Set(
+    (edges || [])
+      .filter(e => e.source === selected.id)
+      .map(e => e.target)
+      .filter(Boolean)
+  )];
+  const hasRoutingChoice = downstreamTargets.length > 1;
+  const routingPolicyDisabledReason = downstreamTargets.length === 0
+    ? 'Routing policy is unavailable until this server has downstream connections. Add outgoing edges if you want routing decisions here.'
+    : 'Routing policy is disabled because this server has only one outgoing edge, so there is no routing decision to make.';
+  const missingClassRoutes = nodeType === 'server' && (data.router?.type === 'class_based')
+    ? sourceClasses.filter(cls => !(cls in (data.router?.class_map || {})))
+    : [];
+  const selectedRouterPolicy = data.router?.type === 'custom'
+    ? findPolicyById(customPolicies.server_routing, data.router?.policy_id)
+    : null;
+  const selectedQueuePolicy = data.queue_policy?.type === 'custom'
+    ? findPolicyById(customPolicies.server_queue, data.queue_policy?.policy_id)
+    : null;
+  const selectedSchedulerPolicy = data.scheduler?.type === 'custom'
+    ? findPolicyById(customPolicies.station_scheduling, data.scheduler?.policy_id)
+    : null;
+
+  const PanelLabel = ({ label, help }) => (
+    <div className="panel-label-row">
+      <label style={{fontSize:10, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:.5, fontWeight:600}}>{label}</label>
+      {help ? <HelpTooltip text={help} /> : null}
+    </div>
+  );
+
+  const Field = ({ label, field, inputType = 'text', extra = {}, help }) => (
+    <div style={{marginBottom:12}}>
+      <PanelLabel label={label} help={help} />
+      <input type={inputType} className="panel-input"
+        value={data[field] ?? ''}
+        onChange={e => onUpdate({ ...data, [field]: inputType === 'number' ? Number(e.target.value) : e.target.value })}
+        {...extra}
+      />
+    </div>
+  );
+
+  return (
+    <div
+      style={{height:'100%', overflowY:'auto', padding:14}}
+      onKeyDownCapture={event => {
+        if ((event.key === 'Backspace' || event.key === 'Delete') && isTextEditingElement(event.target)) {
+          event.stopPropagation();
+        }
+      }}
+    >
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:14, paddingBottom:10, borderBottom:'1px solid var(--border)'}}>
+        <div style={{display:'flex', alignItems:'center', gap:6, minWidth:0}}>
+          <div style={{width:24, height:24, borderRadius:6, background:
+            nodeType === 'source' ? 'rgba(249,115,22,.2)' :
+            nodeType === 'server' ? 'rgba(34,197,94,.2)' :
+            nodeType === 'buffer' ? 'rgba(20,184,166,.2)' :
+            nodeType === 'station' ? 'rgba(59,130,246,.2)' :
+            nodeType === 'sink'   ? 'rgba(71,85,105,.2)' : 'rgba(59,130,246,.2)',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            color:
+              nodeType === 'source' ? '#f97316' :
+              nodeType === 'server' ? '#22c55e' :
+              nodeType === 'buffer' ? '#14b8a6' :
+              nodeType === 'station' ? '#60a5fa' :
+              nodeType === 'sink' ? '#94a3b8' : '#3b82f6',
+          }}>
+            {nodeType === 'source' ? <Icons.Source /> :
+              nodeType === 'server' ? <Icons.Server size={11}/> :
+              nodeType === 'buffer' ? <Icons.Buffer size={11}/> :
+              nodeType === 'station' ? <Icons.Station size={11}/> :
+              nodeType === 'sink' ? <Icons.Sink /> : <Icons.Chart size={11}/>}
+          </div>
+          <div style={{fontSize:11, fontWeight:700, color:'var(--text-primary)', textTransform:'uppercase', letterSpacing:.5}}>{labelMap[nodeType] || nodeType} Properties</div>
+        </div>
+        <button className="btn btn-delete-panel" onClick={onDelete} disabled={isLocked} title={selected.type === 'edge' ? 'Delete edge' : 'Delete node'}>
+          <Icons.Trash size={12} /> Delete
+        </button>
+      </div>
+
+      {isLocked && (
+        <div style={{
+          background:'rgba(59,130,246,.08)',
+          border:'1px solid rgba(59,130,246,.18)',
+          borderRadius:8,
+          padding:'9px 10px',
+          fontSize:11,
+          color:'#93c5fd',
+          lineHeight:1.5,
+          marginBottom:12,
+        }}>
+          Canvas lock is on. Inspecting still works, but graph edits are disabled until you unlock it.
+        </div>
+      )}
+
+      <div className="panel-summary">
+        {NODE_PANEL_INFO[nodeType] || 'Edit the selected item here.'}
+      </div>
+
+      <fieldset disabled={isLocked} style={{border:'none', padding:0, margin:0, minWidth:0}}>
+        <Field
+          label="ID / Label"
+          field="label"
+          help="Human-readable name shown on the canvas. It helps identify the node while editing and reviewing the network."
+        />
+
+        {nodeType === 'source' && <>
+          <Field
+            label="Arrival Rate (λ)"
+            field="arrival_rate"
+            inputType="number"
+            extra={{step:0.1, min:0.01}}
+            help="Average arrival intensity for this source. Larger λ means customers enter the system more frequently."
+          />
+          <Field
+            label="Customer Class"
+            field="customer_class"
+            extra={{placeholder:'optional'}}
+            help="Optional class tag attached to every customer emitted by this source. Class-based routers can branch on this value."
+          />
+          <Field
+            label="Initial Next Node ID"
+            field="next_node_id"
+            extra={{placeholder:'optional'}}
+            help="Optional explicit first destination for customers from this source. If left blank, the source follows its outgoing canvas connection."
+          />
+        </>}
+
+        {nodeType === 'server' && <>
+          <Field
+            label="Service Rate (μ)"
+            field="service_rate"
+            inputType="number"
+            extra={{step:0.1, min:0.01}}
+            help="Per-server service speed. Larger μ means each active server finishes jobs faster on average."
+          />
+          <Field
+            label="Server Count (c)"
+            field="c"
+            inputType="number"
+            extra={{step:1, min:1}}
+            help="Number of parallel service slots at this node. Jobs beyond that limit wait in the server's internal queue."
+          />
+          <div style={{marginBottom:6}}>
+            <PanelLabel
+              label="Queue Policy"
+              help="Controls which waiting job is selected next when a server becomes free. FIFO serves oldest first, while FBFS/LBFS prioritize by stage value."
+            />
+            <select className="panel-select"
+              value={getPolicySelectValue(data.queue_policy, 'fifo')}
+              onChange={e => {
+                const value = e.target.value;
+                if (value.startsWith('custom:')) {
+                  const policyId = value.slice('custom:'.length);
+                  const policy = findPolicyById(customPolicies.server_queue, policyId);
+                  onUpdate({
+                    ...data,
+                    queue_policy: {
+                      type: 'custom',
+                      policy_id: policyId,
+                      label: policy?.name || policyId,
+                      description: policy?.description || '',
+                    },
+                  });
+                  return;
+                }
+                onUpdate({ ...data, queue_policy: { type: value } });
+              }}>
+              <option value="fifo">FIFO</option>
+              <option value="fbfs">FBFS</option>
+              <option value="lbfs">LBFS</option>
+              {(customPolicies.server_queue || []).length > 0 && (
+                <optgroup label="Uploaded Policies">
+                  {(customPolicies.server_queue || []).map(policy => (
+                    <option key={policy.id} value={`custom:${policy.id}`}>{policy.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+          <div className="router-info">
+            {data.queue_policy?.type === 'custom'
+              ? (selectedQueuePolicy?.description || `Uploaded server queue policy from ${selectedQueuePolicy?.source_file || 'policy library'}.`)
+              : SERVER_QUEUE_POLICY_INFO[data.queue_policy?.type || 'fifo']}
+          </div>
+          <div style={{marginBottom:6}}>
+            <PanelLabel
+              label="Routing Policy"
+              help="Controls where completed customers go after service. Probabilistic uses edge weights, round robin cycles targets, and class-based branches by customer class."
+            />
+            <select className="panel-select"
+              disabled={!hasRoutingChoice}
+              value={getPolicySelectValue(data.router, 'probabilistic')}
+              onChange={e => {
+                const value = e.target.value;
+                if (value.startsWith('custom:')) {
+                  const policyId = value.slice('custom:'.length);
+                  const policy = findPolicyById(customPolicies.server_routing, policyId);
+                  onUpdate({
+                    ...data,
+                    router: {
+                      type: 'custom',
+                      policy_id: policyId,
+                      label: policy?.name || policyId,
+                      description: policy?.description || '',
+                    },
+                  });
+                  return;
+                }
+                onUpdate({ ...data, router: { type: value, class_map: data.router?.class_map, fallback: data.router?.fallback } });
+              }}>
+              <option value="probabilistic">Probabilistic (weighted)</option>
+              <option value="round_robin">Round Robin</option>
+              <option value="class_based">Class-Based</option>
+              {(customPolicies.server_routing || []).length > 0 && (
+                <optgroup label="Uploaded Policies">
+                  {(customPolicies.server_routing || []).map(policy => (
+                    <option key={policy.id} value={`custom:${policy.id}`}>{policy.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+          <div className="router-info">
+            {!hasRoutingChoice
+              ? routingPolicyDisabledReason
+              : data.router?.type === 'custom'
+              ? (selectedRouterPolicy?.description || `Uploaded downstream server routing policy from ${selectedRouterPolicy?.source_file || 'policy library'}.`)
+              : ROUTER_INFO[data.router?.type || 'probabilistic']}
+          </div>
+          {hasRoutingChoice && data.router?.type === 'class_based' && missingClassRoutes.length > 0 && (
+            <div style={{
+              background:'rgba(245,158,11,.08)',
+              border:'1px solid rgba(245,158,11,.2)',
+              borderRadius:6,
+              padding:'8px 10px',
+              fontSize:11,
+              color:'#fbbf24',
+              lineHeight:1.5,
+              marginBottom:10,
+            }}>
+              Missing routes for: {missingClassRoutes.join(', ')}
+            </div>
+          )}
+          {hasRoutingChoice && data.router?.type === 'class_based' && (
+            <>
+              <ClassMapEditor
+                classMap={data.router.class_map || {}}
+                availableClasses={sourceClasses}
+                targetOptions={downstreamTargets}
+                onChange={m => onUpdate({ ...data, router: { type: 'class_based', class_map: m, fallback: data.router?.fallback } })}
+              />
+              <div style={{marginTop:10}}>
+                <PanelLabel
+                  label="Fallback Target"
+                  help="Optional downstream node used when a customer's class is not listed in the class map."
+                />
+                <select
+                  className="panel-select"
+                  value={data.router?.fallback || ''}
+                  onChange={e => onUpdate({
+                    ...data,
+                    router: {
+                      type: 'class_based',
+                      class_map: data.router?.class_map || {},
+                      fallback: e.target.value || null,
+                    },
+                  })}
+                >
+                  <option value="">None</option>
+                  {downstreamTargets.map(target => (
+                    <option key={target} value={target}>{target}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+        </>}
+
+        {nodeType === 'station' && <>
+          <Field
+            label="Service Rate (μ)"
+            field="service_rate"
+            inputType="number"
+            extra={{step:0.1, min:0.01}}
+            help="Per-worker service speed for this station. Larger μ means jobs pulled from buffers complete faster."
+          />
+          <Field
+            label="Parallel Servers (c)"
+            field="c"
+            inputType="number"
+            extra={{step:1, min:1}}
+            help="How many jobs this station can process at the same time across its upstream buffers."
+          />
+          <div style={{marginBottom:6}}>
+            <PanelLabel
+              label="Scheduling Policy"
+              help="Decides which connected upstream buffer gets service next when station capacity is available."
+            />
+            <select className="panel-select"
+              value={getPolicySelectValue(data.scheduler, 'round_robin')}
+              onChange={e => {
+                const value = e.target.value;
+                if (value.startsWith('custom:')) {
+                  const policyId = value.slice('custom:'.length);
+                  const policy = findPolicyById(customPolicies.station_scheduling, policyId);
+                  onUpdate({
+                    ...data,
+                    scheduler: {
+                      type: 'custom',
+                      policy_id: policyId,
+                      label: policy?.name || policyId,
+                      description: policy?.description || '',
+                    },
+                  });
+                  return;
+                }
+                onUpdate({ ...data, scheduler: { type: value } });
+              }}>
+              <option value="round_robin">Round Robin</option>
+              <option value="first_non_empty">First Non-Empty</option>
+              <option value="longest_queue">Longest Queue</option>
+              {(customPolicies.station_scheduling || []).length > 0 && (
+                <optgroup label="Uploaded Policies">
+                  {(customPolicies.station_scheduling || []).map(policy => (
+                    <option key={policy.id} value={`custom:${policy.id}`}>{policy.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+          <div className="router-info">
+            {data.scheduler?.type === 'custom'
+              ? (selectedSchedulerPolicy?.description || `Uploaded upstream station scheduler from ${selectedSchedulerPolicy?.source_file || 'policy library'}.`)
+              : SCHEDULER_INFO[data.scheduler?.type || 'round_robin']}
+          </div>
+        </>}
+
+        {nodeType === 'edge' && (
+          <div style={{marginBottom:12}}>
+            <PanelLabel
+              label="Weight"
+              help="Relative routing weight for this edge. Probabilistic routers use these weights to decide how often traffic follows each outgoing edge."
+            />
+            <input type="number" step="0.1" min="0.01" className="panel-input"
+              value={data.weight ?? 1.0}
+              onChange={e => onUpdate({ ...data, weight: Number(e.target.value) })} />
+          </div>
+        )}
+      </fieldset>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+const TABS = [
+  { key:'live',   label:'Live',   Icon: Icons.Live  },
+  { key:'stats',  label:'Stats',  Icon: Icons.Stats  },
+  { key:'theory', label:'Theory', Icon: Icons.Theory },
+  { key:'chart',  label:'Chart',  Icon: Icons.Chart  },
+];
+
+function App() {
+  const [nodes, setNodes] = useState([]);
+  const [edges, setEdges] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [isLocked, setIsLocked] = useState(false);
+  const [until, setUntil] = useState(10000);
+  const [status, setStatus] = useState('idle');
+  const [simTime, setSimTime] = useState(0);
+  const [eventCount, setEventCount] = useState(0);
+  const [stats, setStats] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
+  const [error, setError] = useState(null);
+  const [defaultRouter, setDefaultRouter] = useState('probabilistic');
+  const [warmUp, setWarmUp] = useState(0);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [streamInterval, setStreamInterval] = useState(0.5);
+  const [metricsTab, setMetricsTab] = useState('live');
+  const [servers, setServers] = useState({});
+  const [buffers, setBuffers] = useState({});
+  const [stations, setStations] = useState({});
+  const [customPolicies, setCustomPolicies] = useState(EMPTY_POLICY_LIBRARY);
+  const [policyUploadError, setPolicyUploadError] = useState(null);
+  const [policyUploading, setPolicyUploading] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const wsRef = useRef(null);
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+  const historyRef = useRef([]);
+  const dragSnapshotRef = useRef(false);
+  const { screenToFlowPosition } = useReactFlow();
+
+  const createSnapshot = useCallback((overrides = {}) => ({
+    nodes: cloneValue(overrides.nodes ?? nodes),
+    edges: cloneValue(overrides.edges ?? edges),
+    selected: cloneValue(overrides.selected ?? selected),
+    defaultRouter: overrides.defaultRouter ?? defaultRouter,
+  }), [defaultRouter, edges, nodes, selected]);
+
+  const pushHistorySnapshot = useCallback((snapshot = createSnapshot()) => {
+    historyRef.current = [...historyRef.current, snapshot].slice(-HISTORY_LIMIT);
+    setCanUndo(historyRef.current.length > 0);
+  }, [createSnapshot]);
+
+  const restoreSnapshot = useCallback(snapshot => {
+    if (!snapshot) return;
+    setNodes(cloneValue(snapshot.nodes || []));
+    setEdges(cloneValue(snapshot.edges || []));
+    setSelected(snapshot.selected ? cloneValue(snapshot.selected) : null);
+    setDefaultRouter(snapshot.defaultRouter || 'probabilistic');
+  }, []);
+
+  const undoLastChange = useCallback(() => {
+    if (isLocked || historyRef.current.length === 0) return;
+    const snapshot = historyRef.current[historyRef.current.length - 1];
+    const nextHistory = historyRef.current.slice(0, -1);
+    historyRef.current = nextHistory;
+    setCanUndo(nextHistory.length > 0);
+    restoreSnapshot(snapshot);
+  }, [isLocked, restoreSnapshot]);
+
+  // Chart setup
+  useEffect(() => {
+    if (chartRef.current && !chartInstance.current) {
+      chartInstance.current = new Chart(chartRef.current, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: {
+          animation: false, responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#4a6180', font: { size: 10, family: 'Fira Code' } } } },
+          scales: {
+            x: { ticks: { color: '#4a6180', maxTicksLimit: 8, font: { size: 9 } }, grid: { color: '#1f2f45' } },
+            y: { ticks: { color: '#4a6180', font: { size: 9 } }, grid: { color: '#1f2f45' } },
+          },
+        },
+      });
+    }
+    return () => { if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; } };
+  }, []);
+
+  const loadCustomPolicies = useCallback(async () => {
+    try {
+      const res = await fetch('/api/policies');
+      if (!res.ok) throw new Error('Failed to load uploaded policies');
+      const payload = await res.json();
+      setCustomPolicies({
+        server_routing: payload.server_routing || [],
+        server_queue: payload.server_queue || [],
+        station_scheduling: payload.station_scheduling || [],
+      });
+    } catch (e) {
+      setPolicyUploadError(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCustomPolicies();
+  }, [loadCustomPolicies]);
+
+  const pushChartData = useCallback((state, statsArr) => {
+    const chart = chartInstance.current;
+    if (!chart) return;
+    const label = state.sim_time.toFixed(1);
+    const queueNodeIds = [...Object.keys(state.buffers || {}), ...Object.keys(state.servers || {})];
+    const colors = ['#3b82f6','#22c55e','#f59e0b','#ec4899','#8b5cf6','#06b6d4'];
+    if (chart.data.datasets.length === 0) {
+      queueNodeIds.forEach((sid, i) => chart.data.datasets.push({
+        label: sid, data: [], borderColor: colors[i % colors.length],
+        borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false,
+      }));
+    }
+    chart.data.labels.push(label);
+    if (chart.data.labels.length > 200) { chart.data.labels.shift(); chart.data.datasets.forEach(ds => ds.data.shift()); }
+    queueNodeIds.forEach((sid, i) => {
+      const queueLength = state.buffers?.[sid]?.queue_length ?? state.servers?.[sid]?.queue_length ?? 0;
+      if (chart.data.datasets[i]) chart.data.datasets[i].data.push(queueLength);
+    });
+    chart.update('none');
+  }, []);
+
+  const loadTemplate = useCallback((t) => {
+    if (!t) { setShowTemplateModal(false); return; }
+    pushHistorySnapshot();
+    setNodes(t.nodes); setEdges(t.edges);
+    setDefaultRouter(t.defaultRouter || 'probabilistic');
+    setWarmUp(t.warmUp);
+    if (t.selectedNodeId) {
+      const selectedNode = t.nodes.find(n => n.id === t.selectedNodeId);
+      setSelected(selectedNode ? { type: selectedNode.type, id: selectedNode.id, data: { ...selectedNode.data } } : null);
+    } else {
+      setSelected(null);
+    }
+    setShowTemplateModal(false);
+  }, [pushHistorySnapshot]);
+
+  const uploadPolicy = useCallback(async file => {
+    setPolicyUploadError(null);
+    setPolicyUploading(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/policies/upload', { method: 'POST', body });
+      if (!res.ok) {
+        const payload = await res.json();
+        throw new Error(payload.detail || res.statusText);
+      }
+      await loadCustomPolicies();
+    } catch (e) {
+      setPolicyUploadError(e.message);
+    } finally {
+      setPolicyUploading(false);
+    }
+  }, [loadCustomPolicies]);
+
+  const onDragOver = useCallback(e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }, []);
+  const onDrop = useCallback(e => {
+    e.preventDefault();
+    if (isLocked) return;
+    const type = e.dataTransfer.getData('application/reactflow-type');
+    if (!type) return;
+    pushHistorySnapshot();
+    const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    const id = newId(
+      type === 'source' ? 'src' :
+      type === 'server' ? 'srv' :
+      type === 'buffer' ? 'buf' :
+      type === 'station' ? 'stn' : 'sink'
+    );
+    setNodes(nds => [...nds, { id, type, position, data: defaultNodeData(type, id) }]);
+  }, [isLocked, pushHistorySnapshot, screenToFlowPosition]);
+
+  const onConnect = useCallback(params => {
+    if (isLocked) return;
+    pushHistorySnapshot();
+    setEdges(eds => addEdge({
+      ...params, label: '1.0', data: { weight: 1.0 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#334155' },
+      style: { stroke: '#334155', strokeWidth: 2 },
+    }, eds));
+  }, [isLocked, pushHistorySnapshot]);
+
+  const onNodesChange = useCallback(changes => {
+    setNodes(nds => applyNodeChanges(changes, nds));
+  }, []);
+
+  const onEdgesChange = useCallback(changes => {
+    setEdges(eds => applyEdgeChanges(changes, eds));
+  }, []);
+
+  const onNodeClick = useCallback((_, node) => setSelected({ type: node.type, id: node.id, data: { ...node.data } }), []);
+  const onEdgeClick = useCallback((_, edge) => setSelected({ type: 'edge', id: edge.id, data: { weight: edge.data?.weight ?? 1.0 } }), []);
+  const onPaneClick = useCallback(() => setSelected(null), []);
+
+  const updateSelected = useCallback(newData => {
+    if (isLocked) return;
+    pushHistorySnapshot();
+    setSelected(s => s ? { ...s, data: newData } : s);
+    if (selected?.type === 'edge') {
+      setEdges(eds => eds.map(e => e.id === selected.id ? { ...e, data: { weight: newData.weight }, label: String(newData.weight) } : e));
+    } else {
+      setNodes(nds => nds.map(n => n.id === selected?.id ? { ...n, data: newData } : n));
+    }
+  }, [isLocked, pushHistorySnapshot, selected]);
+
+  const deleteSelected = useCallback(() => {
+    if (!selected || isLocked) return;
+    pushHistorySnapshot();
+    if (selected.type === 'edge') {
+      setEdges(eds => eds.filter(edge => edge.id !== selected.id));
+    } else {
+      setNodes(nds => nds.filter(node => node.id !== selected.id));
+      setEdges(eds => eds.filter(edge => edge.source !== selected.id && edge.target !== selected.id));
+    }
+    setSelected(null);
+  }, [isLocked, pushHistorySnapshot, selected]);
+
+  const onNodeDragStart = useCallback(() => {
+    if (isLocked || dragSnapshotRef.current) return;
+    pushHistorySnapshot();
+    dragSnapshotRef.current = true;
+  }, [isLocked, pushHistorySnapshot]);
+
+  const onNodeDragStop = useCallback(() => {
+    dragSnapshotRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    if (selected.type === 'edge') {
+      if (!edges.some(edge => edge.id === selected.id)) setSelected(null);
+      return;
+    }
+    if (!nodes.some(node => node.id === selected.id)) setSelected(null);
+  }, [selected, nodes, edges]);
+
+  useEffect(() => {
+    const onKeyDown = event => {
+      const isEditingText = isTextEditingElement(event.target) || isTextEditingElement(document.activeElement);
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'z') {
+        if (isEditingText || isLocked || historyRef.current.length === 0) return;
+        event.preventDefault();
+        undoLastChange();
+        return;
+      }
+      if (!selected || isLocked) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+      if (isEditingText) return;
+      event.preventDefault();
+      deleteSelected();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [deleteSelected, isLocked, selected, undoLastChange]);
+
+  const toolbarRouter = selected?.type === 'server'
+    ? (selected.data.router?.type || 'probabilistic')
+    : defaultRouter;
+  const selectedServerTargets = selected?.type === 'server'
+    ? [...new Set(
+        edges
+          .filter(edge => edge.source === selected.id)
+          .map(edge => edge.target)
+          .filter(Boolean)
+      )]
+    : [];
+  const selectedServerHasRoutingChoice = selected?.type === 'server'
+    ? selectedServerTargets.length > 1
+    : true;
+  const toolbarRouterDisabled = isLocked || !selectedServerHasRoutingChoice;
+  const toolbarRouterTitle = selected?.type === 'server' && !selectedServerHasRoutingChoice
+    ? (selectedServerTargets.length === 0
+        ? 'Routing policy is unavailable until this server has downstream connections.'
+        : 'Routing policy is disabled because this server has only one outgoing edge.')
+    : undefined;
+
+  const handleToolbarRouterChange = useCallback(e => {
+    const type = e.target.value;
+    if (selected?.type === 'server') {
+      updateSelected({
+        ...selected.data,
+        router: {
+          type,
+          class_map: type === 'class_based' ? (selected.data.router?.class_map || {}) : selected.data.router?.class_map,
+          fallback: selected.data.router?.fallback,
+        },
+      });
+      return;
+    }
+    if (type === defaultRouter) return;
+    pushHistorySnapshot();
+    setDefaultRouter(type);
+  }, [defaultRouter, pushHistorySnapshot, selected, updateSelected]);
+
+  const buildConfig = useCallback(() => {
+    const nodeList = nodes.map(n => {
+      const d = n.data, base = { id: n.id, type: n.type };
+      if (n.type === 'source') {
+        const next = d.next_node_id || edges.find(e => e.source === n.id)?.target || null;
+        return { ...base, arrival_rate: Number(d.arrival_rate), customer_class: d.customer_class || null, next_node_id: next };
+      }
+      if (n.type === 'server') {
+        const node = { ...base, service_rate: Number(d.service_rate), c: Number(d.c) || 1 };
+        if (d.queue_policy?.type === 'custom' && d.queue_policy.policy_id) {
+          node.queue_policy = { type: 'custom', policy_id: d.queue_policy.policy_id };
+        } else if (d.queue_policy && d.queue_policy.type !== 'fifo') {
+          node.queue_policy = { type: d.queue_policy.type };
+        }
+        if (d.router?.type === 'custom' && d.router.policy_id) {
+          node.router = { type: 'custom', policy_id: d.router.policy_id };
+        } else if (d.router && d.router.type !== 'probabilistic') {
+          node.router = d.router;
+        }
+        return node;
+      }
+      if (n.type === 'station') {
+        const node = { ...base, service_rate: Number(d.service_rate), c: Number(d.c) || 1 };
+        if (d.scheduler?.type === 'custom' && d.scheduler.policy_id) {
+          node.scheduler = { type: 'custom', policy_id: d.scheduler.policy_id };
+        } else if (d.scheduler && d.scheduler.type !== 'round_robin') {
+          node.scheduler = { type: d.scheduler.type };
+        }
+        return node;
+      }
+      return base;
+    });
+    return { warm_up_time: Number(warmUp), nodes: nodeList, edges: edges.map(e => ({ source: e.source, target: e.target, weight: e.data?.weight ?? 1.0 })), default_router: { type: defaultRouter } };
+  }, [nodes, edges, warmUp, defaultRouter]);
+
+  const validateGraph = useCallback(() => {
+    const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+    const successors = {};
+    const predecessors = {};
+    edges.forEach(e => {
+      successors[e.source] = [...(successors[e.source] || []), e.target];
+      predecessors[e.target] = [...(predecessors[e.target] || []), e.source];
+    });
+
+    for (const node of nodes) {
+      if (node.type === 'buffer') {
+        const invalid = (successors[node.id] || []).filter(id => nodeMap[id]?.type !== 'station');
+        if (invalid.length) return `Buffer '${node.id}' may only connect to station nodes.`;
+      }
+      if (node.type === 'station') {
+        const preds = predecessors[node.id] || [];
+        if (preds.length === 0) return `Station '${node.id}' must have at least one incoming buffer.`;
+        const invalidPreds = preds.filter(id => nodeMap[id]?.type !== 'buffer');
+        if (invalidPreds.length) return `Station '${node.id}' may only receive work from buffer nodes.`;
+        const succs = successors[node.id] || [];
+        if (succs.length !== 1) return `Station '${node.id}' must have exactly one outgoing edge.`;
+        const invalidSuccs = succs.filter(id => !['buffer', 'sink', 'server'].includes(nodeMap[id]?.type));
+        if (invalidSuccs.length) return `Station '${node.id}' may only connect to buffer, sink, or server nodes.`;
+      }
+    }
+    return null;
+  }, [nodes, edges]);
+
+  const runSim = useCallback(async () => {
+    setError(null);
+    if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+    if (chartInstance.current) { chartInstance.current.data.labels = []; chartInstance.current.data.datasets = []; chartInstance.current.update('none'); }
+    const validationError = validateGraph();
+    if (validationError) { setError(validationError); return; }
+    const config = buildConfig();
+    let id = sessionId;
+    try {
+      if (id) await fetch(`/api/networks/${id}`, { method: 'DELETE' });
+      const res = await fetch('/api/networks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || res.statusText); }
+      id = (await res.json()).id; setSessionId(id);
+    } catch(e) { setError(e.message); return; }
+    setStatus('running'); setStats([]); setSimTime(0); setEventCount(0); setServers({}); setBuffers({}); setStations({});
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/api/networks/${id}/stream`);
+    wsRef.current = ws;
+    ws.onopen = () => ws.send(JSON.stringify({ until: Number(until), stream_interval: streamInterval }));
+    ws.onmessage = e => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'state' || msg.type === 'done' || msg.type === 'stopped') {
+        setSimTime(msg.data.sim_time); setEventCount(msg.data.event_count);
+        setStats(msg.stats || []); setServers(msg.data.servers || {}); setBuffers(msg.data.buffers || {}); setStations(msg.data.stations || {});
+        pushChartData(msg.data, msg.stats);
+        if (msg.type === 'done' || msg.type === 'stopped') setStatus(msg.data.status);
+      } else if (msg.type === 'error') { setError(msg.message); setStatus('idle'); }
+    };
+    ws.onerror = () => { setError('WebSocket error'); setStatus('idle'); };
+    ws.onclose = () => {
+      if (wsRef.current === ws) wsRef.current = null;
+      setStatus(s => s === 'running' ? 'idle' : s);
+    };
+  }, [buildConfig, sessionId, until, streamInterval, pushChartData, validateGraph]);
+
+  const stopSim = useCallback(async () => {
+    setError(null);
+    if (!sessionId) {
+      setStatus('paused');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/networks/${sessionId}/stop`, { method: 'POST' });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.detail || res.statusText);
+      }
+      const data = await res.json();
+      setStatus(data.status || 'paused');
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [sessionId]);
+
+  const stepSim = useCallback(async () => {
+    setError(null);
+    const validationError = validateGraph();
+    if (validationError) { setError(validationError); return; }
+    let id = sessionId;
+    if (!id) {
+      try {
+        const res = await fetch('/api/networks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildConfig()) });
+        if (!res.ok) { const e = await res.json(); throw new Error(e.detail); }
+        id = (await res.json()).id; setSessionId(id);
+      } catch(e) { setError(e.message); return; }
+    }
+    try {
+      const res = await fetch(`/api/networks/${id}/step`, { method: 'POST' });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail); }
+      const { state, stats: s } = await res.json();
+      setSimTime(state.sim_time); setEventCount(state.event_count);
+      setStats(s || []); setStatus(state.status); setServers(state.servers || {}); setBuffers(state.buffers || {}); setStations(state.stations || {});
+      pushChartData(state, s);
+    } catch(e) { setError(e.message); }
+  }, [buildConfig, sessionId, pushChartData, validateGraph]);
+
+  const resetSim = useCallback(async () => {
+    if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+    if (sessionId) { await fetch(`/api/networks/${sessionId}`, { method: 'DELETE' }); setSessionId(null); }
+    setStatus('idle'); setSimTime(0); setEventCount(0); setStats([]); setError(null); setServers({}); setBuffers({}); setStations({});
+    if (chartInstance.current) { chartInstance.current.data.labels = []; chartInstance.current.data.datasets = []; chartInstance.current.update('none'); }
+  }, [sessionId]);
+
+  const statusColor =
+    status === 'running' ? '#22c55e' :
+    status === 'paused' ? '#f59e0b' :
+    status === 'done' ? '#3b82f6' :
+    '#4a6180';
+  const statusDot =
+    status === 'running' ? '#4ade80' :
+    status === 'paused' ? '#fbbf24' :
+    status === 'done' ? '#60a5fa' :
+    '#334155';
+
+  return (
+    <div style={{display:'flex', flexDirection:'column', height:'100%', background:'var(--bg-base)'}}>
+      {showTemplateModal && <PresetTemplates onLoad={loadTemplate} />}
+      {showPolicyModal && (
+        <PolicyLibraryModal
+          policies={customPolicies}
+          onClose={() => setShowPolicyModal(false)}
+          onUpload={uploadPolicy}
+          uploading={policyUploading}
+          error={policyUploadError}
+        />
+      )}
+
+      {/* Toolbar */}
+      <div style={{display:'flex', alignItems:'center', gap:8, padding:'0 12px', height:48, background:'var(--bg-panel)', borderBottom:'1px solid var(--border)', flexShrink:0}}>
+        {/* Brand */}
+        <div style={{display:'flex', alignItems:'center', gap:8, marginRight:4}}>
+          <div style={{width:28, height:28, borderRadius:7, background:'#1d4ed8', display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <Icons.Live size={13} />
+          </div>
+          <span style={{fontWeight:700, fontSize:13, letterSpacing:.3, color:'var(--text-primary)', fontFamily:'var(--mono)'}}>DES</span>
+        </div>
+
+        <button className="btn btn-template" onClick={() => setShowTemplateModal(true)} disabled={isLocked}>
+          <Icons.Templates size={12} /> Templates
+        </button>
+        <button className="btn btn-template" onClick={() => { setPolicyUploadError(null); setShowPolicyModal(true); }}>
+          <Icons.Upload size={12} /> Policies
+        </button>
+        <button className="btn btn-reset" onClick={undoLastChange} disabled={isLocked || !canUndo} title="Undo last canvas edit (Ctrl/Cmd+Z)">
+          <Icons.Undo /> Undo
+        </button>
+
+        <div className="tb-divider" />
+
+        {/* Sim params */}
+        <div style={{display:'flex', alignItems:'center', gap:6}}>
+          <label style={{fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:5}}>
+            Until
+            <input type="number" min="1" step="1000" value={until} onChange={e => setUntil(e.target.value)}
+              className="tb-input tb-number-input" style={{width:76}} />
+          </label>
+          <label style={{fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:5}}>
+            Warm-up
+            <input type="number" min="0" step="100" value={warmUp} onChange={e => setWarmUp(e.target.value)}
+              className="tb-input tb-number-input" style={{width:72}} />
+          </label>
+          <label style={{fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:5}}>
+            Interval
+            <input type="number" min="0.1" max="2" step="0.1" value={streamInterval} onChange={e => setStreamInterval(Number(e.target.value))}
+              className="tb-input tb-number-input" style={{width:72}} />
+          </label>
+          <label style={{fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:5}}>
+            <span style={{display:'inline-flex', alignItems:'center', gap:5}}>
+              {selected?.type === 'server' ? 'Node Router' : 'Default Router'}
+              <HelpTooltip
+                text={selected?.type === 'server'
+                  ? 'Overrides the network default for this server. It controls how the selected server chooses among multiple outgoing edges after service completes.'
+                  : 'Network-wide routing policy used by servers unless a node-specific router override is set. It only matters when a server has more than one outgoing edge.'}
+              />
+            </span>
+            <select value={toolbarRouter} onChange={handleToolbarRouterChange} className="tb-select" disabled={toolbarRouterDisabled} title={toolbarRouterTitle}>
+              <option value="probabilistic">Probabilistic</option>
+              <option value="round_robin">Round Robin</option>
+              {selected?.type === 'server' && <option value="class_based">Class-Based</option>}
+            </select>
+          </label>
+        </div>
+
+        <div className="tb-divider" />
+
+        {/* Controls */}
+        <button className="btn btn-run"  onClick={runSim}  disabled={status === 'running'}><Icons.Play /> Run</button>
+        <button className="btn btn-step" onClick={stepSim} disabled={status === 'running'}><Icons.Step /> Step</button>
+        <button className="btn btn-stop" onClick={stopSim} disabled={status !== 'running'}><Icons.Stop /> Stop</button>
+        <button className="btn btn-reset" onClick={resetSim}><Icons.Reset /> Reset</button>
+        <button className="btn btn-reset" onClick={() => setIsLocked(v => !v)}>
+          {isLocked ? <Icons.Unlock /> : <Icons.Lock />} {isLocked ? 'Unlock Canvas' : 'Lock Canvas'}
+        </button>
+
+        {/* Status */}
+        <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:12}}>
+          <div style={{display:'flex', alignItems:'center', gap:12, fontSize:11, color:'var(--text-muted)', fontFamily:'var(--mono)'}}>
+            <span>t=<span style={{color:'var(--text-primary)'}}>{simTime.toFixed(1)}</span></span>
+            <span>ev=<span style={{color:'var(--text-primary)'}}>{eventCount}</span></span>
+          </div>
+          <div style={{display:'flex', alignItems:'center', gap:5}}>
+            <div style={{width:6, height:6, borderRadius:'50%', background: statusDot, boxShadow: status === 'running' ? `0 0 6px ${statusDot}` : 'none'}} />
+            <span style={{fontSize:11, fontWeight:700, color: statusColor, letterSpacing:.5, textTransform:'uppercase', fontFamily:'var(--mono)'}}>{status}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Error bar */}
+      {error && (
+        <div style={{background:'rgba(127,29,29,.6)', borderBottom:'1px solid rgba(239,68,68,.2)', padding:'6px 14px', fontSize:11, color:'#fca5a5', flexShrink:0}}>
+          {error}
+        </div>
+      )}
+
+      {/* Main workspace */}
+      <div style={{display:'flex', flex:1, overflow:'hidden'}}>
+
+        {/* Node palette */}
+        <div style={{width:110, background:'var(--bg-panel)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', padding:10, gap:6, flexShrink:0}}>
+          <div style={{fontSize:9, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:.8, fontWeight:700, marginBottom:2, padding:'0 2px'}}>Nodes</div>
+          {[
+            { type:'source', label:'Source', dot:'#f97316' },
+            { type:'server', label:'Server', dot:'#22c55e' },
+            { type:'buffer', label:'Buffer', dot:'#14b8a6' },
+            { type:'station', label:'Station', dot:'#3b82f6' },
+            { type:'sink',   label:'Sink',   dot:'#475569' },
+          ].map(({ type, label, dot }) => (
+            <div key={type} className="palette-item" draggable={!isLocked}
+              style={isLocked ? {opacity:.45, cursor:'not-allowed'} : undefined}
+              onDragStart={e => {
+                if (isLocked) {
+                  e.preventDefault();
+                  return;
+                }
+                e.dataTransfer.setData('application/reactflow-type', type);
+              }}>
+              <div className="palette-dot" style={{background: dot}} />
+              {label}
+            </div>
+          ))}
+          <div style={{fontSize:9, color:'var(--text-muted)', textAlign:'center', marginTop:4, lineHeight:1.5, padding:'0 2px'}}>
+            {isLocked ? 'Canvas locked' : 'Drag onto canvas'}
+          </div>
+        </div>
+
+        {/* Canvas */}
+        <div style={{flex:1, position:'relative'}} onDrop={onDrop} onDragOver={onDragOver}>
+          <ReactFlow
+            nodes={nodes} edges={edges}
+            onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+            onConnect={onConnect} onNodeClick={onNodeClick}
+            onNodeDragStart={onNodeDragStart}
+            onNodeDragStop={onNodeDragStop}
+            onEdgeClick={onEdgeClick} onPaneClick={onPaneClick}
+            nodeTypes={nodeTypes} fitView
+            nodesDraggable={!isLocked}
+            nodesConnectable={!isLocked}
+            elementsSelectable={true}
+            deleteKeyCode={null}
+            style={{background:'var(--bg-surface)'}}
+          >
+            <Background color="#1a2740" gap={24} size={1} />
+            <Controls showInteractive={false} />
+            <MiniMap nodeColor={n =>
+              n.type==='source' ? '#f97316' :
+              n.type==='server' ? '#22c55e' :
+              n.type==='buffer' ? '#14b8a6' :
+              n.type==='station' ? '#3b82f6' : '#475569'
+            } style={{background:'var(--bg-panel)', border:'1px solid var(--border)', borderRadius:8}} />
+          </ReactFlow>
+        </div>
+
+        {/* Properties panel */}
+        <div style={{width:226, background:'var(--bg-panel)', borderLeft:'1px solid var(--border)', overflow:'hidden', flexShrink:0}}>
+          <PropertiesPanel selected={selected} onUpdate={updateSelected} onDelete={deleteSelected} nodes={nodes} edges={edges} customPolicies={customPolicies} isLocked={isLocked} />
+        </div>
+      </div>
+
+      {/* Metrics panel */}
+      <div style={{height:180, display:'flex', flexDirection:'column', background:'var(--bg-panel)', borderTop:'1px solid var(--border)', flexShrink:0}}>
+        {/* Tab bar */}
+        <div style={{display:'flex', borderBottom:'1px solid var(--border)', flexShrink:0, padding:'0 4px'}}>
+          {TABS.map(({ key, label, Icon: TabIcon }) => (
+            <button key={key} onClick={() => setMetricsTab(key)} style={{
+              display:'flex', alignItems:'center', gap:5,
+              padding:'7px 12px', border:'none', borderBottom: metricsTab === key ? '2px solid var(--accent-blue)' : '2px solid transparent',
+              background:'none', cursor:'pointer', fontSize:11, fontWeight:600, fontFamily:'Inter, sans-serif',
+              color: metricsTab === key ? 'var(--text-primary)' : 'var(--text-muted)',
+              transition:'color 150ms',
+            }}>
+              <TabIcon size={12} />
+              {label}
+            </button>
+          ))}
+        </div>
+        {/* Tab content */}
+        <div style={{flex:1, overflow:'hidden'}}>
+          {metricsTab === 'live'   && <LiveMetricsPanel servers={servers} buffers={buffers} stations={stations} stats={stats} />}
+          {metricsTab === 'stats'  && <div style={{height:'100%', overflowY:'auto'}}><StatsTable stats={stats} /></div>}
+          {metricsTab === 'theory' && <TheoreticalComparison nodes={nodes} edges={edges} stats={stats} />}
+          {metricsTab === 'chart'  && <QueueChart chartRef={chartRef} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Root() {
+  return <ReactFlowProvider><App /></ReactFlowProvider>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+</script>
+</body>
+</html>
